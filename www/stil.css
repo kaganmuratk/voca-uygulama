@@ -950,9 +950,9 @@ body:not(.uygulama) .listede, .sesler:empty { display: none; }
 .akis-liste { position: relative; }
 .akis-tap { position: absolute; inset: 0; z-index: 4; }
 /* Oynatıcı katmanı HER ZAMAN tam boyutlu ve işlenir (iOS: visibility:hidden / sıfır boyutlu iframe'de video çizilmiyor, görününce beyaz kalıyor); gizleme opacity ile, kapak resmi üstte durup video gerçekten çizilince kararır. */
-.akis-katman { position: absolute; z-index: 1; pointer-events: none; opacity: 0; background: #000; border-radius: 12px; overflow: hidden; }
+.akis-katman { position: absolute; z-index: 1; pointer-events: none; opacity: .02; background: #000; border-radius: 12px; overflow: hidden; }
 .akis-katman.gorunur { opacity: 1; }
-.akis-kart.oynuyor .akis-kapak { opacity: 0; transition: opacity .15s linear .3s; }
+.akis-kart.oynuyor .akis-kapak { opacity: 0; transition: opacity .12s linear; }
 .akis-katman > div, .akis-katman iframe { width: 100%; height: 100%; border: 0; display: block; }
 .akis-kapak { pointer-events: none; }
 .akis-dbg { margin: 2px 0 0; font: 11px/1.2 monospace; color: var(--m3); }
