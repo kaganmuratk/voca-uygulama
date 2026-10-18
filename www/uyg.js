@@ -15,7 +15,7 @@ const uyg = $('#uyg');
 // web sitesi yalnız sözlük; hesap/liste/pratik/video yalnız uygulamada (Capacitor kabuğu) açılır (Kağan 2026-10-18)
 const UYGULAMA = !!window.Capacitor || navigator.userAgent.includes('VocaApp');
 // Kağan 2026-10-18: web sitesinde bütün kelimeler tutarlı olsun diye BASİT görünür (yalnız tür + Türkçe anlam). Ayrıntılı veri (tanım, örnek, ses, video) silinmedi,
-// sunucuda duruyor; "ayrıntılı sürümü canlıya al" denince WEB_BASIT = false yap (src/sayfa.js'teki aynı bayrakla birlikte).
+// (uygulamada da aynı: Kağan 2026-10-18 "şu an ses olmaması gerek, hepsi basit modda") sunucuda duruyor; "ayrıntılı sürümü canlıya al" denince WEB_BASIT = false yap (src/sayfa.js'teki aynı bayrakla birlikte).
 const WEB_BASIT = true;
 const basitle = (s) => (s.hafif ? s : {
   kelime: s.kelime, ipa: {}, ses: {}, seviye: s.seviye, hafif: true, pv: [], deyimRef: [], deyimler: [], ileri: [], turemis: [],
@@ -515,7 +515,7 @@ async function ogren(ad) {
   yukleniyor();
   await dizin();
   let { sozluk: s, benim: b, klipler = [] } = await istek('/kelime/' + encodeURIComponent(ad));
-  if (s && WEB_BASIT && !UYGULAMA) { s = basitle(s); klipler = []; }
+  if (s && WEB_BASIT) { s = basitle(s); klipler = []; }
   if (!s) {
     uyg.innerHTML = `<a class="geri" href="#/liste">← Kelimelerim</a>
       <div class="ogren-bas"><div><h1 class="basliksoz">${e(ad)}<span class="nokta">.</span></h1></div></div>
