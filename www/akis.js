@@ -94,8 +94,8 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   const P = [yeniP(), yeniP()]; let ai = 0, kart = null, benim = 0, gecis = false, onYuklendi = false, katman = null, gecisT0 = 0, gecisYol = '-', gecisMs = 0, hizliHata = 0;
   const akt = () => P[ai], yed = () => P[1 - ai];
   const katmanKonumla = () => {
-    const k = kartEl(aktif)?.querySelector('.akis-sahne'), p = akt(); if (!k || !p.katman) return;
-    Object.assign(p.katman.style, { top: k.offsetTop + 'px', left: k.offsetLeft + 'px', width: k.offsetWidth + 'px', height: k.offsetHeight + 'px' });
+    const k = kartEl(aktif)?.querySelector('.akis-sahne') || liste.querySelector('.akis-sahne'); if (!k) return;
+    for (const p of P) if (p.katman) Object.assign(p.katman.style, { top: '0', left: '0', transform: `translate(${k.offsetLeft}px, ${k.offsetTop}px)`, width: k.offsetWidth + 'px', height: k.offsetHeight + 'px' });   // ikisi de tam boyutlu, aynı yerde (yedek opacity 0)
   };
   const baslat = (v) => {   // aktif oynatıcıda video başlat (sıfırdan yükle)
     const p = akt(); gecis = true; p.id = v.id; p.onHazir = false;
@@ -105,7 +105,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   const kur = async (p, id, otomatik) => {
     await ytYukle();
     if (p.oyn) return;
-    p.katman = document.createElement('div'); p.katman.className = 'akis-katman'; const ic = document.createElement('div'); p.katman.append(ic); liste.append(p.katman);
+    p.katman = document.createElement('div'); p.katman.className = 'akis-katman'; const ic = document.createElement('div'); p.katman.append(ic); liste.append(p.katman); katmanKonumla();
     p.id = id;
     p.oyn = new YT.Player(ic, {
       videoId: id, host: 'https://www.youtube-nocookie.com',

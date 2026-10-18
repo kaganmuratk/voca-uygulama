@@ -946,11 +946,13 @@ body:not(.uygulama) .listede, .sesler:empty { display: none; }
 .akis-bos { padding: 40px 8px; color: var(--m2); text-align: center; }
 .akis-kart { width: 100%; min-width: 0; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; gap: 10px; padding-bottom: 6px; }
 .akis-sahne { position: relative; flex: 1; min-height: 0; background: #000; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-.akis-kapak { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; object-fit: cover; background: #000; transition: opacity .25s; }
+.akis-kapak { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; object-fit: cover; background: #000; transition: opacity .2s; }
 .akis-liste { position: relative; }
 .akis-tap { position: absolute; inset: 0; z-index: 4; }
-.akis-katman { position: absolute; z-index: 3; pointer-events: none; visibility: hidden; background: #000; border-radius: 12px; overflow: hidden; }
-.akis-katman.gorunur { visibility: visible; }
+/* Oynatıcı katmanı HER ZAMAN tam boyutlu ve işlenir (iOS: visibility:hidden / sıfır boyutlu iframe'de video çizilmiyor, görününce beyaz kalıyor); gizleme opacity ile, kapak resmi üstte durup video gerçekten çizilince kararır. */
+.akis-katman { position: absolute; z-index: 1; pointer-events: none; opacity: 0; background: #000; border-radius: 12px; overflow: hidden; }
+.akis-katman.gorunur { opacity: 1; }
+.akis-kart.oynuyor .akis-kapak { opacity: 0; transition: opacity .15s linear .3s; }
 .akis-katman > div, .akis-katman iframe { width: 100%; height: 100%; border: 0; display: block; }
 .akis-kapak { pointer-events: none; }
 .akis-dbg { margin: 2px 0 0; font: 11px/1.2 monospace; color: var(--m3); }
@@ -960,6 +962,7 @@ body:not(.uygulama) .listede, .sesler:empty { display: none; }
 .akis-kart.yukleniyor .akis-bekle { display: grid; }
 .akis-durum { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 6; margin: 0; padding: 10px 12px; background: rgba(0,0,0,.72); color: #fff; border-radius: 8px; font-size: 14px; }
 .akis-alt { min-height: 96px; min-width: 0; width: 100%; }
+.akis-satir .sozcuk.su-an { background: var(--vurgu-acik); color: var(--murekkep) !important; box-shadow: inset 0 -2px 0 var(--vurgu); transition: none; }   /* Konuşulan kelime: yazı rengi HİÇ değişmez (beyaz yazı + boyanmayan zemin = kelime kayboluyordu, Kağan 2026-10-18); yalnız zemin tonu + alt çizgi */
 .akis-satir { height: 2.8em; overflow: hidden; margin: 0; font-size: 20px; line-height: 1.35; }
 .akis-bilgi { max-width: 100%; margin: 6px 0 0; font-size: 12.5px; color: var(--m2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .akis-sozluk { margin-top: 8px; }
