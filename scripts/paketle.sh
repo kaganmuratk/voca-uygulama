@@ -7,6 +7,15 @@ KAYNAK="${1:-$HOME/Projeler/kelime/public}"
 cd "$(dirname "$0")/.."
 rm -rf www && mkdir www
 rsync -a --exclude 'ses/' --exclude 'sw.js' --exclude 'oynatici*.html' --exclude '_headers' --exclude 'robots.txt' "$KAYNAK"/ www/
+# gömülü yalnızca akis-kendi.json'daki videolar (havuz çalışması public/'e henüz listelenmemiş dosya bırakabilir)
+python3 - <<'PY'
+import json, os
+d = json.load(open('www/akis-kendi.json')); d = d if isinstance(d, list) else d.get('videolar', [])
+ids = {v['id'] for v in d}
+for k in ('akis-video', 'akis-altyazi'):
+    for f in os.listdir('www/' + k):
+        if f.split('.')[0] not in ids: os.remove(f'www/{k}/{f}')
+PY
 # sözlük: canlı sunucudan (derleme anındaki sürüm); başarısız olursa önceki kopya kullanılır
 if curl -sf --max-time 60 -H 'X-Voca-App: 1' https://voca.revelalabs.com.tr/api/sozluk -o www/sozluk.json.tmp && [ "$(wc -c < www/sozluk.json.tmp)" -gt 500000 ]; then mv www/sozluk.json.tmp www/sozluk.json; cp www/sozluk.json sozluk.son.json; else rm -f www/sozluk.json.tmp; [ -f sozluk.son.json ] && cp sozluk.son.json www/sozluk.json; fi
 [ -s www/sozluk.json ] || { echo "HATA: sozluk.json yok" >&2; exit 1; }
