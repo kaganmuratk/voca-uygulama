@@ -171,7 +171,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
     if (videolar[i + 1] && hizliHata < 2) onYukle(videolar[i + 1]);   // hızlı yol çalışmıyorsa arkada boşuna yükleme
     for (const n of [i + 1, i + 2, i + 3]) {
       const v = videolar[n]; if (!v) continue;
-      if (n <= i + 2) { const im = new Image(); im.src = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`; }
+      if (n <= i + 2) { const im = new Image(); im.src = `./sim-kapak.png`; }
       if (altyaziOnbellek.has(v.id)) continue;
       altyaziAl(v.id).then((d) => {
         if (!d || !d.yok) return;
@@ -229,7 +229,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
     liste.innerHTML = videolar.map((v) => `
       <article class="akis-kart" data-id="${v.id}">
         <div class="akis-sahne">
-          <img class="akis-kapak" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="" loading="lazy">
+          <img class="akis-kapak" src="./sim-kapak.png" alt="" loading="lazy">
           <div class="akis-tap"></div>
           <button class="akis-oyna" aria-label="Oynat"><svg viewBox="0 0 24 24" width="44" height="44"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
           <div class="klip-bekle akis-bekle"><i></i></div>

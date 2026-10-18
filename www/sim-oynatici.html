@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;height:100%;background:#000}video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}</style></head><body>
+<video id="v" playsinline webkit-playsinline muted></video>
+<script>
+// SİM TESTİ: yt oynatıcı köprüsü yerine düz <video> (aynı postMessage protokolü). Amaç: iOS WebKit'te iframe/opacity/katman/önyükleme davranışını GERÇEK piksellerle ölçmek.
+const q = new URLSearchParams(location.search), id = q.get('v') || '', a = q.get('a') === '1';
+let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+const v = document.getElementById('v'); let kare = 0, durum = -1;
+const kaynak = (vid) => { let x = 0; for (const c of vid) x = (x * 31 + c.charCodeAt(0)) >>> 0; return 'sim-v' + (x % 4) + '.mp4'; };
+v.src = kaynak(id); v.loop = true; v.muted = false;
+const rv = () => v.requestVideoFrameCallback?.(() => { kare++; rv(); }); rv();
+v.addEventListener('playing', () => { durum = 1; }); v.addEventListener('pause', () => { durum = 2; }); v.addEventListener('waiting', () => { durum = 3; });
+v.addEventListener('loadeddata', () => parent.postMessage({ voca: 1, tur: 'hazir' }, '*'));
+if (a) v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+addEventListener('message', (e) => { const m = e.data || {}; if (m.komut === 'oynat') v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); if (m.komut === 'durdur') v.pause(); if (m.komut === 'yukle') { v.src = kaynak(m.v); v.currentTime = m.bas || 0; v.play().catch(() => {}); } if (m.komut === 'ses') v.volume = m.n / 100; if (m.komut === 'sessiz') v.muted = !!m.b; if (m.komut === 'git') v.currentTime = m.t; });
+setInterval(() => parent.postMessage({ voca: 1, tur: 'zaman', t: v.currentTime, durum: v.paused ? (v.readyState < 3 ? 3 : 2) : (v.readyState < 3 ? 3 : 1), sure: v.duration || 0, hiz: 1, ses: v.muted, kare }, '*'), 150);
+</script></body></html>

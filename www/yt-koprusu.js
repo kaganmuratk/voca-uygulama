@@ -14,7 +14,7 @@ export class KopruOyuncu {
     if (pv.start) q.set('s', String(pv.start));
     if (pv.autoplay) q.set('a', '1');
     this.cerceve = document.createElement('iframe');
-    this.cerceve.src = SITE + '/oynatici.html?' + q;
+    this.cerceve.src = (window.__simOyn || (SITE + '/oynatici.html')) + '?' + q;
     this.cerceve.allow = 'autoplay; encrypted-media; fullscreen';
     this.cerceve.setAttribute('playsinline', '');
     this.cerceve.style.cssText = 'width:100%;height:100%;border:0;background:#000;display:block';
@@ -27,7 +27,7 @@ export class KopruOyuncu {
       else if (m.tur === 'hata') this.olay.onError?.({ data: m.kod });
       else if (m.tur === 'zaman') {
         const onceki = this.k.durum;
-        this.k = { t: m.t, durum: m.durum, sure: m.sure, hiz: m.hiz }; if (typeof m.ses === 'boolean') this.sessiz = m.ses; this.zT = performance.now(); this.mesaj++;
+        this.k = { t: m.t, durum: m.durum, sure: m.sure, hiz: m.hiz }; if (typeof m.ses === 'boolean') this.sessiz = m.ses; if (typeof m.kare === 'number') this.kare = m.kare; this.zT = performance.now(); this.mesaj++;
         if (m.durum !== onceki) this.olay.onStateChange?.({ data: m.durum, target: this });
       }
     };
