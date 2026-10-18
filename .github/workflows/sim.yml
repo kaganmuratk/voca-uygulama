@@ -45,9 +45,9 @@ jobs:
           sleep 3
           xcrun simctl launch $DEV tr.com.revelalabs.vocadeney
           worker() { while ! grep -q '"olay": *"bitti"' log.jsonl 2>/dev/null; do xcrun simctl io $DEV screenshot --type=jpeg out/shots/$(python3 -c 'import time;print(int(time.time()*1000))').jpg > /dev/null 2>&1; done; }
-          worker & worker & worker & worker &
+          worker & P1=$!; worker & P2=$!; worker & P3=$!; worker & P4=$!
           for i in $(seq 1 300); do if grep -q '"olay": *"bitti"' log.jsonl 2>/dev/null; then break; fi; sleep 1; done
-          wait
+          wait $P1 $P2 $P3 $P4
           sleep 2
           cp log.jsonl out/ 2>/dev/null || true
           ls -la out | head
