@@ -1,41 +1,40 @@
-// iOS Simulator (CI) otomatik akış testi: Voca Deney içinde #/video açılır, sırayla kaydırılır, durum yerel günlük sunucusuna gönderilir.
-// İki kip arka arkaya: 'ikili' (iki oynatıcı, hızlı yol) ve 'tek' (voca-tek=1). Sonuçlar + ekran videosu CI çıktısında.
+// iOS Simulator (CI) akış testi — KENDİ VİDEO AKIŞI: gerçek mp4'ler (canlı siteden, Range ile), gerçek WebKit.
+// Aşama 1: 10 kaydırma, 5 sn arayla (normal kullanım). Aşama 2: hızlı seri kaydırma (700 ms arayla 8 kart). Günlük yerel sunucuya (127.0.0.1:8099).
 const Http = window.Capacitor?.Plugins?.CapacitorHttp;
 const gonder = (o) => { try { Http.post({ url: 'http://127.0.0.1:8099/log', headers: { 'Content-Type': 'application/json' }, data: { ts: Date.now(), ...o } }); } catch (e) { /* günlük yok */ } };
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
-const asama = localStorage.getItem('sim-asama') || 'ikili';
-if (asama === 'ikili-op') { const st = document.createElement('style'); st.textContent = '.akis-liste .akis-katman { opacity: .02 } .akis-liste .akis-katman.gorunur { opacity: 1 }'; document.head.append(st); }
+const asama = localStorage.getItem('sim-asama') || 'normal';
 gonder({ olay: 'basla', asama, ua: navigator.userAgent, w: innerWidth, h: innerHeight });
 addEventListener('error', (e) => gonder({ olay: 'js-hata', mesaj: String(e.message), kaynak: e.filename + ':' + e.lineno }));
 addEventListener('unhandledrejection', (e) => gonder({ olay: 'js-red', mesaj: String(e.reason?.message || e.reason) }));
 const snap = (etiket) => {
-  const sh = document.querySelector('.akis-sahne'); const kat = [...document.querySelectorAll('.akis-katman')].map((x) => { const r = x.getBoundingClientRect(), cs = getComputedStyle(x); return { gor: x.classList.contains('gorunur'), op: cs.opacity, y: Math.round(r.y), x: Math.round(r.x), w: Math.round(r.width), h: Math.round(r.height) }; });
-  const sr = (() => { const r = document.querySelector('.akis-kart.oynuyor .akis-sahne, .akis-kart.yukleniyor .akis-sahne, .akis-kart.durdu .akis-sahne')?.getBoundingClientRect(); return r ? [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : null; })();
-  const pp = (window.__akisP || []).map((x) => ({ rol: x.rol, hz: x.hazir, oh: x.onHazir, ms: x.sessiz, st: x.oyn?.getPlayerState?.(), kare: x.oyn?.kare, t: +(x.oyn?.getCurrentTime?.() || 0).toFixed(1), id: x.id }));
-  const sahneW = [...document.querySelectorAll('.akis-sahne')].map((x) => Math.round(x.getBoundingClientRect().width));
-  const kart = document.querySelector('.akis-kart.oynuyor, .akis-kart.yukleniyor, .akis-kart.durdu');
-  const dbg = kart?.querySelector('.akis-dbg')?.textContent || '';
-  const kapak = kart?.querySelector('.akis-kapak'); const satir = kart?.querySelector('.akis-satir')?.textContent?.trim().slice(0, 50) || '';
-  const hata = kart?.querySelector('.akis-durum')?.textContent || '';
-  return { olay: 'snap', asama, etiket, sr, pp, sahneW: sahneW.slice(0, 3), kart: kart ? kart.className.replace('akis-kart', '').trim() : '-', id: kart?.dataset.id, kat, kapakOp: kapak ? getComputedStyle(kapak).opacity : null, dbg, satir, hata };
+  const aktifKart = document.querySelector('.kv-kart.oynuyor, .kv-kart.yukleniyor, .kv-kart.durdu');
+  const kartlar = [...document.querySelectorAll('.kv-kart')];
+  const ai = aktifKart ? kartlar.indexOf(aktifKart) : -1;
+  const sr = (() => { const r = aktifKart?.querySelector('.kv-sahne')?.getBoundingClientRect(); return r ? [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : null; })();
+  const pp = [-1, 0, 1, 2].map((d) => { const k = kartlar[ai + d]; const v = k?.querySelector('video'); return v ? { d, rs: v.readyState, hz: v.dataset.hazir === '1', p: v.paused, t: +v.currentTime.toFixed(2), src: !!v.dataset.kaynak, m: v.muted } : null; });
+  return { olay: 'snap', asama, etiket, ai, kart: aktifKart ? aktifKart.className.replace('kv-kart', '').trim() : '-', sr, pp, dbg: aktifKart?.querySelector('.kv-dbg')?.textContent || '', satir: aktifKart?.querySelector('.kv-satir')?.textContent?.trim().slice(0, 50) || '', hata: aktifKart?.querySelector('.kv-durum')?.textContent || '' };
 };
 (async () => {
   await bekle(5000);
   location.hash = '#/video';
-  for (let k = 0; k < 100 && !document.querySelector('.akis-kart'); k++) await bekle(200);
-  const liste = document.querySelector('.akis-liste'); if (!liste) { gonder({ olay: 'hata', mesaj: 'akis-liste yok' }); return; }
-  const dur = setInterval(() => gonder(snap('ara')), 250);
-  await bekle(9000);   // ilk video
+  for (let k = 0; k < 100 && !document.querySelector('.kv-kart'); k++) await bekle(200);
+  const liste = document.querySelector('.kv-liste'); if (!liste) { gonder({ olay: 'hata', mesaj: 'kv-liste yok' }); return; }
+  const dur = setInterval(() => gonder(snap('ara')), 200);
+  await bekle(9000);
   gonder({ olay: 'isaret', etiket: 'ilk-video-bitti' });
-  for (let i = 1; i <= 10; i++) {
-    const kartlar = document.querySelectorAll('.akis-kart'); if (!kartlar[i]) break;
-    gonder({ olay: 'isaret', etiket: 'kaydir', i });
-    liste.scrollTo({ top: kartlar[i].offsetTop, behavior: 'smooth' });
-    await bekle(5000);
+  const kartlar = () => document.querySelectorAll('.kv-kart');
+  const gec = (i) => { const k = kartlar()[i]; if (k) liste.scrollTo({ top: k.offsetTop, behavior: 'smooth' }); };
+  if (asama === 'normal') {
+    for (let i = 1; i <= 7; i++) { gonder({ olay: 'isaret', etiket: 'kaydir', i }); gec(i); await bekle(5000); }
+    // altyazıyı sürükle (programlı): konum değişkeni
+    liste.style.setProperty('--ay', '0.5'); gonder({ olay: 'isaret', etiket: 'ay-0.5' }); await bekle(2500);
+    liste.style.setProperty('--ay', '0.16'); await bekle(1500);
+    clearInterval(dur); gonder({ olay: 'isaret', etiket: 'asama-bitti', asama });
+    localStorage.setItem('sim-asama', 'hizli'); location.hash = '#/'; location.reload();
+  } else {
+    for (let i = 1; i <= 6; i++) { gonder({ olay: 'isaret', etiket: 'kaydir', i }); gec(i); await bekle(1100); }
+    await bekle(4000);
+    clearInterval(dur); gonder({ olay: 'isaret', etiket: 'asama-bitti', asama }); gonder({ olay: 'bitti' });
   }
-  clearInterval(dur);
-  gonder({ olay: 'isaret', etiket: 'asama-bitti', asama });
-  if (asama === 'ikili') { localStorage.setItem('sim-asama', 'ikili-op'); location.hash = '#/'; location.reload(); }
-  else if (asama === 'ikili-op') { localStorage.setItem('sim-asama', 'tek'); localStorage.setItem('voca-tek', '1'); location.hash = '#/'; location.reload(); }
-  else gonder({ olay: 'bitti' });
 })();

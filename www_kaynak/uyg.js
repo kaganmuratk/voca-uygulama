@@ -3,7 +3,8 @@
 import { bicimRegex, kacis } from './bicim.js';
 import { klipOynatici } from './klip.js';
 import { akisSayfasi, akisIsit } from './akis.js';
-import { PAKET, sunucuAdresi, apiIstek, jetonYaz } from './ortam.js';
+import { kendiAkis } from './akis-kendi.js';
+import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz } from './ortam.js';
 import { videoSayfasi } from './video.js';
 let klipTemizle = () => {};
 const $ = (s, k = document) => k.querySelector(s);
@@ -102,6 +103,7 @@ const YOLLAR = [
   [/^#\/gecmis$/, () => git('#/pratik')], // Geçmiş artık Pratik ekranında
   [/^#\/k\/(.+)$/, (m) => ogren(decodeURIComponent(m[1]))],
   [/^#\/video$/, akisAc],
+  [/^#\/video\/yt$/, akisAc],
   [/^#\/video\/link$/, videoAc],
   [/^#\/giris$/, giris],
   [/^#\/hesap$/, hesap],
@@ -608,10 +610,11 @@ let listeFiltre = { q: '', g: 'tum', s: '', sr: 'yeni' };
 async function akisAc() {
   await dizin();
   uyg.innerHTML = '<section class="sayfa-akis"></section>';
-  klipTemizle = akisSayfasi(uyg.firstElementChild, {
-    dizin: DIZIN, istek, bildir, girisGerekli, girisli: () => !!BEN,
-    ekle: async (w) => { await istek('/kelimeler', { method: 'POST', govde: { kelimeler: [w] } }); bildir('Listene eklendi.'); },
-  });
+  const ortak = { dizin: DIZIN, istek, bildir, girisGerekli, girisli: () => !!BEN, ekle: async (w) => { await istek('/kelimeler', { method: 'POST', govde: { kelimeler: [w] } }); bildir('Listene eklendi.'); } };
+  // Kendi sunucumuzdaki videolar varsa onlar (anında geçiş); yoksa ya da #/video/yt ise YouTube akışı
+  let kendi = [];
+  if (!location.hash.startsWith('#/video/yt')) { try { const r = await fetch((PAKET ? SITE : '') + '/akis-kendi.json', { cache: 'no-cache' }); if (r.ok) kendi = await r.json(); } catch { /* ağ yok: YouTube akışı */ } }
+  klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, videolar: kendi }) : akisSayfasi(uyg.firstElementChild, ortak);
 }
 async function videoAc() {
   await dizin();

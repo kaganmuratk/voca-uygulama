@@ -131,7 +131,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
             if (!onYuklendi) { onYuklendi = true; onHazirla(aktif); }
           }
           else if (ev.data === 0) { try { p.oyn.seekTo(0, true); p.oyn.playVideo(); } catch { /* bitti */ } }
-          else if (ev.data === 2) { kart.classList.add('durdu'); if (kapakBekle && p.oyn.getCurrentTime() > 0.05) { kapakBekle = false; kart.classList.add('oynuyor'); } clearInterval(izleyici); tik(); }
+          else if (ev.data === 2) { if (kapakBekle && p.oyn.getCurrentTime() > 0.05) { kapakBekle = false; kart.classList.add('oynuyor'); } clearInterval(izleyici); tik(); const bn2 = benim; setTimeout(() => { if (bn2 === benim && p.rol === 'aktif' && p.oyn.getPlayerState?.() === 2) kart.classList.add('durdu'); }, 600); }   // oynat simgesi yalnız gerçekten duraklayınca (geçişte anlık 'duraklatıldı' simgeyi çakıp söndürüyordu)
         },
         onError: (ev) => {
           if (p.rol !== 'aktif') { p.onHazir = false; p.id = ''; return; }   // arkadaki bozuksa o kartta normal yoldan denenir

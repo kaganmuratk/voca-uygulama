@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")/.."
 rm -rf www && mkdir www
-rsync -a --exclude 'ses/' --exclude 'sw.js' --exclude 'oynatici*.html' --exclude '_headers' --exclude 'robots.txt' ${1:-$HOME/Projeler/kelime/public}/ www/
+rsync -a --exclude 'ses/' --exclude 'akis-video/' --exclude 'sw.js' --exclude 'oynatici*.html' --exclude '_headers' --exclude 'robots.txt' ${1:-$HOME/Projeler/kelime/public}/ www/
 cp ek/* www/
 python3 - <<'P'
 p='www/akis.js'; s=open(p).read(); s=s.replace('https://i.ytimg.com/vi/${v.id}/hqdefault.jpg','./sim-kapak.png'); open(p,'w').write(s)
