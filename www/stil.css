@@ -992,8 +992,9 @@ body:not(.uygulama) .listede, .sesler:empty { display: none; }
 .kv-kaydet svg { fill: none; stroke: #fff; stroke-width: 2; stroke-linejoin: round; filter: drop-shadow(0 1px 4px rgba(0,0,0,.6)); }
 .kv-kaydet.acik svg { fill: #fff; }
 /* altyazı: videonun ortasında, sabit, tek satır, hafif arka planlı */
-.kv-altyazi { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); z-index: 6; padding: 0 12px; text-align: center; pointer-events: none; }
-.kv-altyazi .kv-satir { pointer-events: auto; }
+.kv-altyazi { position: absolute; left: 0; right: 0; top: calc(var(--ust, .5) * 100%); transform: translateY(-50%); z-index: 6; padding: 0 12px; text-align: center; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+.kv-altyazi .kv-satir { pointer-events: auto; touch-action: none; cursor: grab; }
+.kv-altyazi.suruklenen .kv-satir { cursor: grabbing; }
 .kv-satir { display: inline; margin: 0; font: 600 clamp(18px, 5.2vw, 23px)/1.9 var(--serif); white-space: nowrap; color: #fff; background: rgba(0,0,0,.5); padding: .12em .5em; border-radius: 8px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .kv-satir:empty { display: none; }
 .kv-satir .sozcuk { color: #fff; padding: 3px 3px; border-radius: 4px; border: 0; font: inherit; }

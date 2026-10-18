@@ -8,6 +8,10 @@ import { yerelOku, yerelYaz } from './yerel.js';
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mutlak = (y) => (PAKET ? SITE + y : y);
+const AY_ANAHTAR = 'voca-altyazi-ust';   // altyazının üstten konumu (sahne yüksekliğinin oranı; varsayılan 0,5 = ekranın ortası)
+const ayOku = () => { try { const v = parseFloat(localStorage.getItem(AY_ANAHTAR)); return Number.isFinite(v) ? Math.min(0.88, Math.max(0.1, v)) : 0.5; } catch { return 0.5; } };
+const ayYaz = (v) => { try { localStorage.setItem(AY_ANAHTAR, String(v)); } catch { /* depolama kapalı */ } };
+
 // ——— modül düzeyi: liste sırası ve indirilen videolar (uygulama açılışında ısınma + akış sayfası aynı depoyu kullanır) ———
 const DEPO = { sira: null, blob: new Map(), hata: new Map(), indiriliyor: new Set(), isci: false, hedefler: () => [] };
 function sirala(liste) {
@@ -79,6 +83,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; DEPO.sira = videolar; }
   let otoEngelli = false, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, kayitli = new Set();
   const altyaziOnbellek = new Map();
+  liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
   const vid = (i) => kart(i)?.querySelector('video');
   const durum = (i, m) => { const el = kart(i)?.querySelector('.kv-durum'); if (el) { el.textContent = m || ''; el.hidden = !m; } };
@@ -252,9 +257,11 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const hedef = Math.abs(p - s0) > 0.04 ? (p > s0 ? Math.ceil(p - 0.001) : Math.floor(p + 0.001)) : aktif;
     const el = vid(hedef); if (el && el.dataset.kaynak && el.paused) { el.muted = false; el.play().catch(() => { el.muted = true; el.play().catch(() => {}); }); }
   }, { passive: true });
+  let surukleSonu = 0;
   liste.addEventListener('click', (ev) => {
     sesiAc();
     const k = ev.target.closest('.kv-kart'); if (!k) return;
+    if (Date.now() - surukleSonu < 350) { ev.preventDefault(); ev.stopPropagation(); return; }   // altyazı sürüklemesinden hemen sonraki click yutulur
     const kb = ev.target.closest('.kv-kaydet');
     if (kb) { kaydetDegistir(k.dataset.id, kb); return; }
     const i = [...liste.children].indexOf(k), el = vid(i);
@@ -285,6 +292,25 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     }
   });
   liste.addEventListener('scroll', () => { if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); }, { passive: true });
+
+  // ——— altyazıyı aşağı-yukarı sürükleme (Kaydet düğmesi SABİT kalır) ———
+  liste.addEventListener('pointerdown', (ev) => {
+    const ca = ev.target.closest('.kv-altyazi'); if (!ca) return;
+    const h = ca.closest('.kv-sahne').getBoundingClientRect().height;
+    const y0 = ev.clientY, u0 = ayOku(); let surukleniyor = false;
+    const tasi = (m) => {
+      const dy = m.clientY - y0;
+      if (!surukleniyor && Math.abs(dy) < 8) return;
+      if (!surukleniyor) { surukleniyor = true; ca.classList.add('suruklenen'); }
+      m.preventDefault();
+      liste.style.setProperty('--ust', String(Math.min(0.88, Math.max(0.1, u0 + dy / h))));
+    };
+    const bitir = () => {
+      removeEventListener('pointermove', tasi); removeEventListener('pointerup', bitir); removeEventListener('pointercancel', bitir);
+      if (surukleniyor) { ca.classList.remove('suruklenen'); ayYaz(parseFloat(liste.style.getPropertyValue('--ust'))); surukleSonu = Date.now(); }
+    };
+    addEventListener('pointermove', tasi, { passive: false }); addEventListener('pointerup', bitir); addEventListener('pointercancel', bitir);   // pencere düzeyinde: parmak satırdan çıksa da sürükleme sürer
+  });
 
   return () => {
     sayac++; clearInterval(izleyici); gozlemci?.disconnect(); document.body.classList.remove('video-tam');
