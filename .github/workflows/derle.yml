@@ -2,7 +2,7 @@ name: Derle
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, deney-gomulu]
 jobs:
   android:
     runs-on: ubuntu-latest

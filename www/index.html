@@ -1,3 +1,28 @@
-<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Voca</title><body style="font-family:system-ui;background:#0D0D0F;color:#f1efe9;display:grid;place-items:center;min-height:100vh;margin:0;text-align:center">
-<div><h1 style="font-weight:400">voca</h1><p>Bağlantı kurulamadı. İnternetini kontrol edip uygulamayı yeniden aç.</p></div></body></html>
+<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Voca Deney</title>
+<style>body{font:15px system-ui;background:#101114;color:#eee;margin:0;padding:calc(env(safe-area-inset-top) + 12px) 14px 40px}
+h1{font-size:18px;margin:0 0 8px}.t{border:1px solid #333;border-radius:8px;padding:10px;margin:10px 0}
+.ok{color:#7ee787}.kotu{color:#ff7b72}iframe{width:100%;aspect-ratio:16/9;border:0;background:#000}pre{white-space:pre-wrap;font-size:12px;margin:6px 0 0}</style>
+<body><h1>Voca Deney: gömülü arayüz testleri</h1>
+<div class="t"><b>0. Ortam</b><pre id="ortam"></pre></div>
+<div class="t"><b>1. Doğrudan YouTube oynatıcı (uygulama kökeninden)</b><div id="yt1"></div><pre id="s1">bekleniyor</pre></div>
+<div class="t"><b>2. Köprü sayfası (voca.revelalabs.com.tr/oynatici.html içinde iframe)</b><iframe id="f2" allow="autoplay; encrypted-media" allowfullscreen></iframe><pre id="s2">bekleniyor</pre></div>
+<div class="t"><b>3. Sunucu isteği (CORS)</b><pre id="s3">bekleniyor</pre></div>
+<div class="t"><b>4. Yerel HTTP (Capacitor, CORS yok)</b><pre id="s4">bekleniyor</pre></div>
+<script>
+const V='M7lc1UVf-VE';
+const $=(i)=>document.getElementById(i), yaz=(i,m,ok)=>{const e=$(i);e.textContent=m;e.className=ok===true?'ok':ok===false?'kotu':''};
+$('ortam').textContent=['origin: '+location.origin,'protokol: '+location.protocol,'Capacitor: '+(!!window.Capacitor),'platform: '+(window.Capacitor&&Capacitor.getPlatform&&Capacitor.getPlatform()),'ua: '+navigator.userAgent].join('\n');
+// 1
+const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';document.head.appendChild(s);
+window.onYouTubeIframeAPIReady=()=>{new YT.Player('yt1',{videoId:V,host:'https://www.youtube-nocookie.com',playerVars:{playsinline:1},width:'100%',height:'200',events:{onReady:()=>yaz('s1','hazır (hata yok, oynatmayı dene)',true),onError:(e)=>yaz('s1','HATA kodu '+e.data+' (153 = köken/referer sorunu)',false)}})};
+setTimeout(()=>{if($('s1').textContent==='bekleniyor')yaz('s1','10 sn içinde yanıt yok (ağ ya da engel)',false)},10000);
+// 2
+let k2=false;addEventListener('message',(e)=>{if(e.data&&e.data.voca){if(!k2){k2=true;yaz('s2','köprü mesaj gönderdi: '+JSON.stringify(e.data).slice(0,160),true)}}});
+$('f2').src='https://voca.revelalabs.com.tr/oynatici.html?v='+V;
+setTimeout(()=>{if(!k2)yaz('s2','10 sn içinde köprüden mesaj gelmedi (video yüklenmediyse ya da Hata 153 ise)',false)},10000);
+// 3
+fetch('https://voca.revelalabs.com.tr/api/sozluk').then(r=>r.json()).then(j=>yaz('s3','başarılı: '+Object.keys(j.kelimeler||j).length+' kayıt',true)).catch(e=>yaz('s3','başarısız: '+e.message+' (beklenen: CORS izni henüz yok)',false));
+// 4
+try{const H=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.CapacitorHttp;if(!H){yaz('s4','CapacitorHttp eklentisi yok',false)}else{H.get({url:'https://voca.revelalabs.com.tr/api/sozluk'}).then(r=>yaz('s4','durum '+r.status+', veri '+JSON.stringify(r.data).length+' bayt',r.status===200)).catch(e=>yaz('s4','hata: '+e.message,false))}}catch(e){yaz('s4','hata: '+e.message,false)}
+</script></body></html>

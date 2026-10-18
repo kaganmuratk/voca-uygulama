@@ -1,17 +1,7 @@
 {
-  "appId": "tr.com.revelalabs.voca",
-  "appName": "Voca",
+  "appId": "tr.com.revelalabs.vocadeney",
+  "appName": "Voca Deney",
   "webDir": "www",
-  "server": {
-    "url": "https://voca.revelalabs.com.tr",
-    "allowNavigation": [
-      "voca.revelalabs.com.tr",
-      "accounts.google.com",
-      "*.googleusercontent.com",
-      "www.youtube.com",
-      "www.youtube-nocookie.com"
-    ]
-  },
   "ios": {
     "contentInset": "always",
     "appendUserAgent": "VocaApp"
