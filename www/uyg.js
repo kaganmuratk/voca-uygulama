@@ -149,9 +149,11 @@ async function yonlendir() {
   document.body.classList.toggle('misafir', !BEN);
   const ad = h.startsWith('#/hesap') || h.startsWith('#/giris') ? 'hesap' : h.startsWith('#/liste') ? 'liste' : h.startsWith('#/pratik') || h.startsWith('#/gecmis') ? 'pratik' : h.startsWith('#/video') ? 'video' : h.startsWith('#/ara') || h.startsWith('#/ekle') || h === '#/' || h === '#' ? 'ara' : '';
   $$('[data-yol]').forEach((a) => a.classList.toggle('aktif', a.dataset.yol === ad));
+  document.body.dataset.sayfa = h.startsWith('#/giris') ? 'giris' : ad;   // renk alanları (stil.css: telefonda sayfa başına bir üst renk)
+  document.body.dataset.ekran = '';
   for (const [r, f] of YOLLAR) {
     const m = h.match(r);
-    if (m) { window.scrollTo(0, 0); try { await f(m); } catch (x) { if (x.message !== 'giriş') hataGoster(x); } hosgeldin(); return; }
+    if (m) { window.scrollTo(0, 0); try { await f(m); } catch (x) { if (x.message !== 'giriş') hataGoster(x); } document.body.dataset.ekran = uyg.querySelector('.basliksoz') ? 'kelime' : ''; hosgeldin(); return; }
   }
   git('#/');
 }
