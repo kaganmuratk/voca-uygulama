@@ -2,7 +2,7 @@ name: Simulator testi
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [sim-test]
 jobs:
   sim:
     runs-on: macos-latest
