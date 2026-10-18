@@ -8,12 +8,13 @@ gonder({ olay: 'basla', asama, ua: navigator.userAgent, w: innerWidth, h: innerH
 addEventListener('error', (e) => gonder({ olay: 'js-hata', mesaj: String(e.message), kaynak: e.filename + ':' + e.lineno }));
 addEventListener('unhandledrejection', (e) => gonder({ olay: 'js-red', mesaj: String(e.reason?.message || e.reason) }));
 const snap = (etiket) => {
-  const kat = [...document.querySelectorAll('.akis-katman')].map((x) => { const r = x.getBoundingClientRect(), cs = getComputedStyle(x); return { gor: x.classList.contains('gorunur'), op: cs.opacity, y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }; });
+  const sh = document.querySelector('.akis-sahne'); const kat = [...document.querySelectorAll('.akis-katman')].map((x) => { const r = x.getBoundingClientRect(), cs = getComputedStyle(x); return { gor: x.classList.contains('gorunur'), op: cs.opacity, y: Math.round(r.y), x: Math.round(r.x), w: Math.round(r.width), h: Math.round(r.height) }; });
+  const sahneW = [...document.querySelectorAll('.akis-sahne')].map((x) => Math.round(x.getBoundingClientRect().width));
   const kart = document.querySelector('.akis-kart.oynuyor, .akis-kart.yukleniyor, .akis-kart.durdu');
   const dbg = [...document.querySelectorAll('.akis-dbg')].map((x) => x.textContent).find(Boolean) || '';
   const kapak = kart?.querySelector('.akis-kapak'); const satir = kart?.querySelector('.akis-satir')?.textContent?.trim().slice(0, 50) || '';
   const hata = kart?.querySelector('.akis-durum')?.textContent || '';
-  return { olay: 'snap', asama, etiket, kart: kart ? kart.className.replace('akis-kart', '').trim() : '-', id: kart?.dataset.id, kat, kapakOp: kapak ? getComputedStyle(kapak).opacity : null, dbg, satir, hata };
+  return { olay: 'snap', asama, etiket, sahneW: sahneW.slice(0, 3), kart: kart ? kart.className.replace('akis-kart', '').trim() : '-', id: kart?.dataset.id, kat, kapakOp: kapak ? getComputedStyle(kapak).opacity : null, dbg, satir, hata };
 };
 (async () => {
   await bekle(5000);
