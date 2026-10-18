@@ -8,6 +8,12 @@ import { yerelOku, yerelYaz } from './yerel.js';
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mutlak = (y) => (PAKET ? SITE + y : y);
+const AY_ANAHTAR = 'voca-altyazi-ust';   // altyazının üstten konumu (sahne yüksekliğinin oranı; varsayılan 0,5 = ekranın ortası)
+const ayOku = () => { try { const v = parseFloat(localStorage.getItem(AY_ANAHTAR)); return Number.isFinite(v) ? Math.min(0.88, Math.max(0.1, v)) : 0.5; } catch { return 0.5; } };
+const HIZLAR = [1, 1.25, 1.5, 2, 0.75, 0.5];
+function hizOku() { try { const v = parseFloat(localStorage.getItem('voca-hiz')); return HIZLAR.includes(v) ? v : 1; } catch { return 1; } }
+const ayYaz = (v) => { try { localStorage.setItem(AY_ANAHTAR, String(v)); } catch { /* depolama kapalı */ } };
+
 // ——— modül düzeyi: liste sırası ve indirilen videolar (uygulama açılışında ısınma + akış sayfası aynı depoyu kullanır) ———
 const DEPO = { sira: null, blob: new Map(), hata: new Map(), indiriliyor: new Set(), isci: false, hedefler: () => [] };
 function sirala(liste) {
@@ -51,9 +57,7 @@ const KAYIT = (ad) => 'kayit:' + (ad || '');
 export async function kayitlariOku(ad) { const l = await yerelOku(KAYIT(ad)); return Array.isArray(l) ? l : []; }
 
 // Altyazı TEK ekran satırı: kelimeler ölçülen genişliğe göre parçalara bölünür (parça zamanı = ilk kelimesinin zamanı)
-function tekSatir(satirlar, genislik, font) {
-  const c = document.createElement('canvas').getContext('2d'); c.font = font;
-  const olc = (t) => c.measureText(t).width;
+function tekSatir(satirlar, genislik, olc) {
   const sonuc = [];
   for (const s of satirlar) {
     let cur = [];
@@ -77,8 +81,9 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   const liste = kap.querySelector('.kv-liste');
   let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = sirala(ham));
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; DEPO.sira = videolar; }
-  let otoEngelli = false, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, kayitli = new Set();
+  let hiz = hizOku(), basili = false, basiliSon = 0, otoEngelli = false, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, kayitli = new Set();
   const altyaziOnbellek = new Map();
+  liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
   const vid = (i) => kart(i)?.querySelector('video');
   const durum = (i, m) => { const el = kart(i)?.querySelector('.kv-durum'); if (el) { el.textContent = m || ''; el.hidden = !m; } };
@@ -100,8 +105,15 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
         <div class="kv-tap"></div>
         <div class="kv-oyna" hidden aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></div>
         <div class="kv-bekle"><i></i></div>
-        <div class="kv-yan"><button class="kv-kaydet" type="button" aria-label="Kaydet" aria-pressed="false"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg><span>Kaydet</span></button></div>
-        <div class="kv-altyazi"><p class="kv-satir" aria-live="off"></p></div>
+        <div class="kv-yan">
+          <button class="kv-dugme kv-kaydet" type="button" aria-label="Kaydet" aria-pressed="false"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg><span>Kaydet</span></button>
+          <button class="kv-dugme kv-hiz" type="button" aria-label="Hız"><b>1x</b><span>Hız</span></button>
+          <button class="kv-dugme kv-kel" type="button" aria-label="Videodaki kelimeler"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M4 6h16M4 12h10M4 18h16"/></svg><span>Kelimeler</span></button>
+          <button class="kv-dugme kv-paylas" type="button" aria-label="Paylaş"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></svg><span>Paylaş</span></button>
+        </div>
+        <div class="kv-hizrozet" hidden>2x ▸▸</div>
+        <div class="kv-kelpanel" hidden></div>
+        <div class="kv-altyazi"><p class="kv-satir" aria-live="off"></p><span class="kv-satir kv-olc" aria-hidden="true"></span></div>
         <div class="kv-sozluk" hidden></div>
         <p class="kv-durum" hidden></p>
       </div>
@@ -175,6 +187,33 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   };
 
   // ——— etkinleştirme ———
+  const hizUygula = (el) => { if (!el) return; try { el.defaultPlaybackRate = hiz; el.playbackRate = basili ? 2 : hiz; } catch { /* yok */ } };
+  const hizYazi = () => liste.querySelectorAll('.kv-hiz b').forEach((b) => { b.textContent = hiz + 'x'; });
+  async function paylas(v) {
+    const url = SITE + '/#/video/ac/' + v.id, P = window.Capacitor?.Plugins?.Share;
+    try {
+      if (P) await P.share({ title: 'Voca', text: v.baslik, url, dialogTitle: 'Paylaş' });
+      else if (navigator.share) await navigator.share({ title: 'Voca', text: v.baslik, url });
+      else { await navigator.clipboard.writeText(url); durum(aktif, 'Bağlantı kopyalandı.'); const bn = sayac; setTimeout(() => { if (bn === sayac) durum(aktif, ''); }, 1600); }
+    } catch { /* kullanıcı iptal etti */ }
+  }
+  let panelDevam = false;
+  function kelPaneliKapat() { const p = kart(aktif)?.querySelector('.kv-kelpanel'); if (p) p.hidden = true; if (panelDevam && !kullaniciDurdu) vid(aktif)?.play().catch(() => {}); panelDevam = false; }
+  async function kelPaneliAc(k, v) {   // videodaki öğrenmeye değer kelimeler: kelime + seviye + ilk anlam + ekle
+    const p = k.querySelector('.kv-kelpanel'), el = vid(aktif);
+    if (!p.hidden) return kelPaneliKapat();
+    sozlukKapat(); panelDevam = !!el && !el.paused; try { el?.pause(); } catch { /* yok */ }
+    const d = await altyaziAl(v.id), gor = new Set(), satir = [];
+    for (const s of (d?.satirlar || [])) s.k.forEach(([w], j) => {
+      if (!ogrenmeyeDeger(w, j === 0)) return;
+      const kk = kokBul(w.replace(/[^\w'’-]/g, ''), dizin || []); if (!kk || gor.has(kk.k)) return;
+      gor.add(kk.k); satir.push(kk);
+    });
+    p.innerHTML = `<div class="kp-bas"><b>Bu videodaki kelimeler</b><button class="kp-kapat" type="button" aria-label="Kapat">×</button></div>` + (satir.length
+      ? `<ul>${satir.slice(0, 40).map((x) => `<li><div><b>${e(x.k)}</b>${x.s ? ` <span class="seviye">${x.s}</span>` : ''}<br><i>${e((x.an?.[0]?.[1]) || x.tr || '')}</i></div><button class="kp-ekle" type="button" data-ekle="${e(x.k)}" aria-label="Listeme ekle">+</button></li>`).join('')}</ul>`
+      : '<p class="kp-bos">Bu videoda sözlüğümüzden öğrenmeye değer kelime bulamadım.</p>');
+    p.hidden = false;
+  }
   function yenidenYukle(el) {   // takılmış video öğesi: kaynağı söküp yeniden bağla (bazen iOS çözücüsü ilk bağlamada takılıyor)
     const u = el.currentSrc || el.src; if (!u) return;
     try { el.pause(); el.removeAttribute('src'); el.load(); el.src = u; el.load(); } catch { /* yok */ }
@@ -184,32 +223,33 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     el.dataset.basladi = String(bn);
     if (Math.abs(el.currentTime) > 0.2) { try { el.currentTime = 0; } catch { /* yok */ } }
     const engelle = () => {   // gerçekten engelli (Düşük Güç Modu vb.): spinner KALMAZ, oynat simgesi çıkar
-      otoEngelli = true; if (bn !== sayac) return;
-      k.classList.remove('yukleniyor'); k.classList.add('durdu'); k.querySelector('.kv-oyna').hidden = false; durum(i, 'Başlatmak için dokun.');
+      otoEngelli = true; if (bn !== sayac || el.dataset.kullanici === String(bn)) return;
+      k.classList.remove('yukleniyor'); k.classList.add('durdu'); k.dataset.oto = '1'; k.querySelector('.kv-oyna').hidden = false; durum(i, 'Başlatmak için dokun.');
     };
     const dene = (ikinci) => {
       el.muted = false;
       el.play().then(() => { sesAcik = true; }).catch(() => {
-        if (bn !== sayac) return; el.muted = true;
+        if (bn !== sayac || el.dataset.kullanici === String(bn)) return; el.muted = true;
         el.play().then(() => { if (bn === sayac) durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); }).catch(() => {
-          if (bn !== sayac) return;
+          if (bn !== sayac || el.dataset.kullanici === String(bn)) return;
           if (!ikinci) { yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(true); }, 250); } else engelle();   // önce kaynağı yeniden bağlayıp bir kez daha dene (iOS çözücü takılması)
         });
       });
     };
+    hizUygula(el);
     dene(false);
     setTimeout(() => {   // 2,5 sn içinde hâlâ oynamıyorsa (kullanıcı durdurmadıysa, simge yoksa): kaynağı yeniden bağla, bir kez daha
-      if (bn !== sayac || !el.paused || kullaniciDurdu || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
+      if (bn !== sayac || !el.paused || kullaniciDurdu || el.dataset.kullanici === String(bn) || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
       el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(true); }, 250);
     }, 2500);
-    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); k.classList.remove('yukleniyor', 'durdu'); k.classList.add('oynuyor'); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
+    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor'); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
     if (!el.paused && el.readyState >= 3) oynadi(); else el.addEventListener('playing', oynadi);
   }
   function etkinles(i) {
     if (i === aktif) return;
     const onceki = aktif;
     if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
-    clearInterval(izleyici); sozlukKapat(); satirlar = []; sira = -1; kullaniciDurdu = false;
+    clearInterval(izleyici); sozlukKapat(); liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; basili = false; satirlar = []; sira = -1; kullaniciDurdu = false;
     aktif = i; const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
     if (!k || !el) return;
     durum(i, ''); gecisT0 = performance.now();
@@ -224,7 +264,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       }, 7000);
     }
     izleyici = setInterval(tik, 50);
-    altyaziAl(v.id).then((d) => { if (bn !== sayac) return; const ls = getComputedStyle(kart(i).querySelector('.kv-satir')); satirlar = (d && Array.isArray(d.satirlar)) ? tekSatir(d.satirlar, Math.max(120, liste.clientWidth - 2 * 22), `${ls.fontWeight} ${ls.fontSize} ${ls.fontFamily}`) : []; });
+    altyaziAl(v.id).then((d) => { if (bn !== sayac) return; const olcEl = kart(i).querySelector('.kv-olc'); const olc = (t) => { olcEl.textContent = t; return olcEl.getBoundingClientRect().width; }; satirlar = (d && Array.isArray(d.satirlar)) ? tekSatir(d.satirlar, Math.round(liste.clientWidth * 0.66), olc) : []; });
     setTimeout(() => { if (bn === sayac && el.readyState < 3 && !el.error && el.dataset.kaynak) { durum(i, 'Video açılmadı, sonrakine geçiliyor…'); setTimeout(() => { if (bn === sayac) kart(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 1500); } }, 14000);
   }
 
@@ -238,26 +278,34 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     for (const k of kayitlar) if (k.isIntersecting && k.intersectionRatio >= 0.7) etkinles([...liste.children].indexOf(k.target));
   }, { root: liste, threshold: [0.7] });
   [...liste.children].forEach((k) => gozlemci.observe(k));
-  komsulariHazirla(0);
+  hizYazi(); komsulariHazirla(0);
 
   // ——— dokunuşlar ———
   const sesiAc = () => { sesAcik = true; const el = vid(aktif); if (el && el.muted) { el.muted = false; durum(aktif, ''); } };   // dokunuş = kullanıcı hareketi: sesi açabiliriz
-  let dokBas = 0;
-  liste.addEventListener('touchstart', () => { dokBas = liste.scrollTop; }, { passive: true });
-  liste.addEventListener('touchend', () => {
-    sesiAc();
-    // Otomatik oynatma engelliyse (Düşük Güç Modu vb.) kaydırma dokunuşunun İÇİNDE hedef videoyu başlat (tarayıcı yalnız dokunuş içindeki oynatmaya izin verir)
-    if (!otoEngelli) return;
-    const h = liste.clientHeight || 1, p = liste.scrollTop / h, s0 = dokBas / h;
-    const hedef = Math.abs(p - s0) > 0.04 ? (p > s0 ? Math.ceil(p - 0.001) : Math.floor(p + 0.001)) : aktif;
-    const el = vid(hedef); if (el && el.dataset.kaynak && el.paused) { el.muted = false; el.play().catch(() => { el.muted = true; el.play().catch(() => {}); }); }
-  }, { passive: true });
+  liste.addEventListener('touchend', sesiAc, { passive: true });
+  let surukleSonu = 0;
   liste.addEventListener('click', (ev) => {
     sesiAc();
     const k = ev.target.closest('.kv-kart'); if (!k) return;
+    if (Date.now() - surukleSonu < 350 || Date.now() - basiliSon < 350) { ev.preventDefault(); ev.stopPropagation(); return; }   // sürükleme / basılı tutma (2x) sonrası click yutulur
     const kb = ev.target.closest('.kv-kaydet');
     if (kb) { kaydetDegistir(k.dataset.id, kb); return; }
-    const i = [...liste.children].indexOf(k), el = vid(i);
+    const i = [...liste.children].indexOf(k), el = vid(i), v = videolar[i];
+    if (ev.target.closest('.kv-hiz')) { hiz = HIZLAR[(HIZLAR.indexOf(hiz) + 1) % HIZLAR.length]; try { localStorage.setItem('voca-hiz', String(hiz)); } catch { /* yok */ } hizYazi(); hizUygula(el); return; }
+    if (ev.target.closest('.kv-paylas')) { paylas(v); return; }
+    if (ev.target.closest('.kv-kel')) { if (i === aktif) kelPaneliAc(k, v); return; }
+    if (ev.target.closest('.kp-kapat')) { kelPaneliKapat(); return; }
+    const ke = ev.target.closest('.kp-ekle');
+    if (ke) { if (!girisli()) return girisGerekli(); ekle(ke.dataset.ekle).then(() => { ke.textContent = '✓'; ke.disabled = true; }); return; }
+    if (ev.target.closest('.kv-kelpanel')) return;
+    // 'otomatik başlamadı' durumunda HER dokunuş (altyazı kelimesi dahil) yalnızca videoyu başlatır
+    if (i === aktif && k.dataset.oto === '1' && el) {
+      el.dataset.kullanici = String(sayac); delete k.dataset.oto; kullaniciDurdu = false; k.classList.remove('durdu'); k.querySelector('.kv-oyna').hidden = true; durum(i, '');
+      if (el.readyState < 2 || el.error) yenidenYukle(el);
+      el.muted = false; hizUygula(el);
+      el.play().catch(() => { el.muted = true; el.play().catch(() => { yenidenYukle(el); setTimeout(() => el.play().catch(() => { k.classList.add('durdu'); k.dataset.oto = '1'; k.querySelector('.kv-oyna').hidden = false; }), 250); }); });
+      return;
+    }
     const b = ev.target.closest('button.sozcuk');
     if (b && i === aktif) {   // kelimeye dokun: video HEMEN durur (durmuşsa da çalışır), ilk anlam çıkar
       if (b.classList.contains('secik')) { sozlukKapat(); if (!kullaniciDurdu) el?.play().catch(() => {}); return; }
@@ -281,10 +329,43 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (!k.querySelector('.kv-sozluk').hidden) { sozlukKapat(); if (!kullaniciDurdu) { el.play().catch(() => {}); return; } }
       const oy = k.querySelector('.kv-oyna');
       if (el.paused) { kullaniciDurdu = false; oy.hidden = true; k.classList.remove('durdu'); durum(i, ''); if (el.readyState < 2 || el.error) yenidenYukle(el); el.muted = false; el.play().catch(() => { yenidenYukle(el); setTimeout(() => el.play().catch(() => { el.muted = true; el.play().catch(() => { k.classList.add('durdu'); oy.hidden = false; }); }), 200); }); }
-      else { kullaniciDurdu = true; el.pause(); oy.hidden = false; k.classList.add('durdu'); }   // simge YALNIZ kullanıcı durdurunca; altyazı kelimeleri yine tıklanabilir (simge dokunuşu engellemez)
+      else { kullaniciDurdu = true; el.pause(); oy.hidden = false; k.classList.add('durdu'); delete k.dataset.oto; }   // simge YALNIZ kullanıcı durdurunca; altyazı kelimeleri yine tıklanabilir (simge dokunuşu engellemez)
     }
   });
-  liste.addEventListener('scroll', () => { if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); }, { passive: true });
+  liste.addEventListener('scroll', () => { if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); if (liste.querySelector('.kv-kelpanel:not([hidden])')) { liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; } }, { passive: true });
+  // ——— basılı tut = 2x (TikTok/Instagram gibi), bırakınca eski hıza dön ———
+  liste.addEventListener('pointerdown', (ev) => {
+    if (!ev.target.closest('.kv-tap')) return;
+    const k = ev.target.closest('.kv-kart'), el = vid(aktif);
+    if (!el || kart(aktif) !== k || el.paused) return;
+    const y0 = ev.clientY, x0 = ev.clientX;
+    const z = setTimeout(() => { basili = true; hizUygula(el); const r = k.querySelector('.kv-hizrozet'); if (r) r.hidden = false; }, 380);
+    const bit = (m) => {
+      if (m.type === 'pointermove' && Math.abs(m.clientY - y0) < 12 && Math.abs(m.clientX - x0) < 12) return;   // küçük titreme
+      clearTimeout(z); removeEventListener('pointerup', bit); removeEventListener('pointercancel', bit); removeEventListener('pointermove', bit);
+      if (basili) { basili = false; basiliSon = Date.now(); hizUygula(vid(aktif)); k.querySelector('.kv-hizrozet').hidden = true; }
+    };
+    addEventListener('pointerup', bit); addEventListener('pointercancel', bit); addEventListener('pointermove', bit);
+  });
+
+  // ——— altyazıyı aşağı-yukarı sürükleme (Kaydet düğmesi SABİT kalır) ———
+  liste.addEventListener('pointerdown', (ev) => {
+    const ca = ev.target.closest('.kv-altyazi'); if (!ca) return;
+    const h = ca.closest('.kv-sahne').getBoundingClientRect().height;
+    const y0 = ev.clientY, u0 = ayOku(); let surukleniyor = false;
+    const tasi = (m) => {
+      const dy = m.clientY - y0;
+      if (!surukleniyor && Math.abs(dy) < 8) return;
+      if (!surukleniyor) { surukleniyor = true; ca.classList.add('suruklenen'); }
+      m.preventDefault();
+      liste.style.setProperty('--ust', String(Math.min(0.88, Math.max(0.1, u0 + dy / h))));
+    };
+    const bitir = () => {
+      removeEventListener('pointermove', tasi); removeEventListener('pointerup', bitir); removeEventListener('pointercancel', bitir);
+      if (surukleniyor) { ca.classList.remove('suruklenen'); ayYaz(parseFloat(liste.style.getPropertyValue('--ust'))); surukleSonu = Date.now(); }
+    };
+    addEventListener('pointermove', tasi, { passive: false }); addEventListener('pointerup', bitir); addEventListener('pointercancel', bitir);   // pencere düzeyinde: parmak satırdan çıksa da sürükleme sürer
+  });
 
   return () => {
     sayac++; clearInterval(izleyici); gozlemci?.disconnect(); document.body.classList.remove('video-tam');
