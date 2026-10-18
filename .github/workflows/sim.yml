@@ -12,10 +12,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm ci
-      - name: Test betiğini sayfaya ekle
+      - name: Sim www'yi hazırla (kaynak: kelime/public kopyası www_kaynak)
         run: |
-          sed -i '' 's#</body>#<script type="module" src="/sim-test.js"></script></body>#' www/index.html
-          grep -c sim-test www/index.html
+          sh scripts/hazirla.sh www_kaynak
       - run: npx cap sync ios
       - name: ATS (yerel günlük sunucusu için)
         run: /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" ios/App/App/Info.plist

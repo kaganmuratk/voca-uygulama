@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Voca oynatıcı</title>
+<style>html, body { margin: 0; height: 100%; background: #000; } #yt { position: fixed; inset: 0; width: 100%; height: 100%; }</style>
+</head>
+<body>
+<div id="yt"></div>
+<script>
+// Voca uygulaması (Android/iOS kabuğu) için gömülü YouTube oynatıcısı (2026-10-15, deneme).
+// Uygulama bu sayfayı iframe ile açar: YouTube, oynatıcıyı voca.revelalabs.com.tr'nin açtığını görür (Hata 153 olmaz).
+// Uygulamayla postMessage: gelen {komut: 'oynat'|'durdur'|'yukle', v} | {komut:'git', t} | {komut:'hiz', h} ; giden {tur: 'zaman', t, durum, sure, hiz} 150 ms'de bir.
+const q = new URLSearchParams(location.search), v = q.get('v') || '';
+// c=0: YouTube'un kendi kontrol çubuğu gizli (resmî playerVars.controls), uygulama kendi çubuğunu çizer (Kağan 2026-10-15, deneme 6)
+const kontrol = q.get('c') === '0' ? 0 : 1;
+const basla = parseInt(q.get('s') || '0', 10) || 0, otomatik = q.get('a') === '1' ? 1 : 0; // s: başlangıç saniyesi, a: kendiliğinden başla (uygulama köprüsü)
+let oyuncu = null;
+const gonder = (m) => parent.postMessage({ voca: 1, ...m }, '*');
+function altyaziKapat() { try { oyuncu.unloadModule('captions'); oyuncu.unloadModule('cc'); oyuncu.setOption('captions', 'track', {}); } catch (e) {} }
+window.onYouTubeIframeAPIReady = () => {
+  oyuncu = new YT.Player('yt', {
+    videoId: v, host: 'https://www.youtube-nocookie.com',
+    playerVars: { playsinline: 1, controls: kontrol, disablekb: 1 - kontrol, cc_load_policy: 0, cc_lang_pref: 'en', hl: 'en', iv_load_policy: 3, rel: 0, modestbranding: 1, fs: 0, start: basla, autoplay: otomatik, origin: location.origin },
+    events: {
+      // YouTube'un kendi altyazısı kapalı kalsın: cc_load_policy hesap tercihi açıksa yetmiyor (Kağan, 2026-10-15 APK denemesi)
+      onReady: () => { altyaziKapat(); gonder({ tur: 'hazir' }); },
+      onApiChange: () => altyaziKapat(),
+      onStateChange: (e) => { if (e.data === 1) altyaziKapat(); },
+      onError: (e) => gonder({ tur: 'hata', kod: e.data }),
+    },
+  });
+  setInterval(() => { if (oyuncu?.getCurrentTime) gonder({ tur: 'zaman', t: oyuncu.getCurrentTime(), durum: oyuncu.getPlayerState(), sure: oyuncu.getDuration?.() || 0, hiz: oyuncu.getPlaybackRate?.() || 1, ses: !!oyuncu.isMuted?.() }); }, 150);
+};
+addEventListener('message', (e) => {
+  const m = e.data || {};
+  if (!oyuncu) return;
+  if (m.komut === 'oynat') oyuncu.playVideo();
+  if (m.komut === 'durdur') oyuncu.pauseVideo();
+  if (m.komut === 'yukle' && m.v) oyuncu.loadVideoById({ videoId: m.v, startSeconds: m.bas || 0 });
+  if (m.komut === 'ses' && typeof m.n === 'number') oyuncu.setVolume(m.n);
+  if (m.komut === 'sessiz') m.b ? oyuncu.mute() : oyuncu.unMute();
+  if (m.komut === 'git' && typeof m.t === 'number') oyuncu.seekTo(m.t, true);
+  if (m.komut === 'hiz' && typeof m.h === 'number') oyuncu.setPlaybackRate(m.h);
+});
+const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.append(s);
+</script>
+</body>
+</html>

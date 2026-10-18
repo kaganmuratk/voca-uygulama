@@ -76,6 +76,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   const tik = () => {
     if (!oyn) return;
     const t = oyn.getCurrentTime();
+    if (kapakBekle && t >= kapakEsik) { kapakBekle = false; kartEl(aktif)?.classList.add('oynuyor'); }
     if (HATA_AYIKLA) { const d = kartEl(aktif)?.querySelector('.akis-dbg'); if (d) { d.hidden = false; d.textContent = `t ${t.toFixed(1)} · durum ${oyn.getPlayerState?.()} · satır ${sira + 1}/${satirlar.length} · mesaj ${oyn.mesaj ?? '-'} · geçiş ${gecisYol} ${gecisMs}ms`; } }
     let n = -1;
     for (let k = 0; k < satirlar.length && satirlar[k].bas <= t; k++) n = k;
@@ -91,7 +92,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   // Kaydırınca hazır olan oynatıcı hemen devralır (anında başlar); hazır değilse etkin oynatıcıya loadVideoById (iframe yeniden kurulmaz).
   // Oynatıcılar listenin içinde kayan üst katmandır; oynamaya başlayana kadar gizli, altta kapak görünür (beyaz ekran olmaz).
   const yeniP = () => ({ oyn: null, katman: null, hazir: false, id: '', rol: 'bos', onHazir: false, sessiz: false, bekleyen: null });
-  const P = [yeniP(), yeniP()]; window.__akisP = P; let konumZaman = 0, ai = 0, kart = null, benim = 0, gecis = false, onYuklendi = false, katman = null, gecisT0 = 0, gecisYol = '-', gecisMs = 0, hizliHata = (() => { try { return localStorage.getItem('voca-tek') === '1' ? 99 : 0; } catch { return 0; } })();   // voca-tek=1: tek oynatıcı kipi (deney/yedek)
+  const P = [yeniP(), yeniP()]; window.__akisP = P; let kapakBekle = false, kapakEsik = 0.3, konumZaman = 0, ai = 0, kart = null, benim = 0, gecis = false, onYuklendi = false, katman = null, gecisT0 = 0, gecisYol = '-', gecisMs = 0, hizliHata = (() => { try { return localStorage.getItem('voca-tek') === '1' ? 99 : 0; } catch { return 0; } })();   // voca-tek=1: tek oynatıcı kipi (deney/yedek)
   const akt = () => P[ai], yed = () => P[1 - ai];
   const katmanKonumla = () => {
     const k = kartEl(aktif)?.querySelector('.akis-sahne') || liste.querySelector('.akis-sahne'); if (!k) return;
@@ -126,11 +127,11 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
           if (p.rol !== 'aktif' || !kart) return;
           if (gecis && ev.data !== 1) return;   // yeni videoya geçerken eskinin kalıntı olaylarını yoksay
           if (ev.data === 1) {
-            gecis = false; if (gecisT0) { gecisMs = Math.round(performance.now() - gecisT0); gecisT0 = 0; } p.katman.classList.add('gorunur'); kart.classList.remove('yukleniyor', 'durdu'); kart.classList.add('oynuyor'); clearInterval(izleyici); izleyici = setInterval(tik, 80);
+            gecis = false; if (gecisT0) { gecisMs = Math.round(performance.now() - gecisT0); gecisT0 = 0; } p.katman.classList.add('gorunur'); kart.classList.remove('yukleniyor', 'durdu'); kapakBekle = true; kapakEsik = gecisYol === 'hızlı' ? 0.05 : 0.3; clearInterval(izleyici); izleyici = setInterval(tik, 80);
             if (!onYuklendi) { onYuklendi = true; onHazirla(aktif); }
           }
           else if (ev.data === 0) { try { p.oyn.seekTo(0, true); p.oyn.playVideo(); } catch { /* bitti */ } }
-          else if (ev.data === 2) { kart.classList.add('durdu'); clearInterval(izleyici); tik(); }
+          else if (ev.data === 2) { kart.classList.add('durdu'); if (kapakBekle && p.oyn.getCurrentTime() > 0.05) { kapakBekle = false; kart.classList.add('oynuyor'); } clearInterval(izleyici); tik(); }
         },
         onError: (ev) => {
           if (p.rol !== 'aktif') { p.onHazir = false; p.id = ''; return; }   // arkadaki bozuksa o kartta normal yoldan denenir
@@ -157,7 +158,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   }
 
   function birak() {
-    clearInterval(izleyici); izleyici = null;
+    clearInterval(izleyici); izleyici = null; kapakBekle = false;
     const p = akt(); try { p.oyn?.mute(); p.sessiz = !!p.oyn; p.oyn?.pauseVideo(); } catch { /* yok */ }   // eski videonun sesi anında kesilsin (duraklatma mesajı gecikebiliyor)
     p.katman?.classList.remove('gorunur');
     satirlar = []; sira = -1;
@@ -204,7 +205,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
       katmanKonumla();
       if (!p.hazir) { if (p.id !== v.id) p.bekleyen = v; }   // hazır olunca doğru videoyla başlar
       else if (p.id !== v.id) baslat(v);
-      else if (p.oyn.getPlayerState?.() === 1 && !gecis && !p.katman.classList.contains('gorunur')) { p.katman.classList.add('gorunur'); kart.classList.remove('yukleniyor', 'durdu'); kart.classList.add('oynuyor'); clearInterval(izleyici); izleyici = setInterval(tik, 80); if (!onYuklendi) { onYuklendi = true; onHazirla(i); } }   // kurulurken zaten başlamışsa
+      else if (p.oyn.getPlayerState?.() === 1 && !gecis && !p.katman.classList.contains('gorunur')) { p.katman.classList.add('gorunur'); kart.classList.remove('yukleniyor', 'durdu'); kapakBekle = true; kapakEsik = gecisYol === 'hızlı' ? 0.05 : 0.3; clearInterval(izleyici); izleyici = setInterval(tik, 80); if (!onYuklendi) { onYuklendi = true; onHazirla(i); } }   // kurulurken zaten başlamışsa
     }
     // ağ takılırsa (durum 3 = arabelleğe alıyor) 7 sn sonra videoyu bir kez yeniden iste; yine olmazsa sonrakine geç
     setTimeout(() => {

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Voca — İngilizce-Türkçe sözlük</title>
+<meta name="robots" content="index, follow">
+<meta name="description" content="İngilizce kelimelerin Türkçe anlamı, seviyesi ve örnek cümleleri. Voca ile kelimeleri videolardan öğren.">
+<meta name="theme-color" content="#F4F2ED" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D0D0F" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/ikon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/ikon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/stil.css">
+</head>
+<body>
+<header class="ust">
+  <a class="logo" href="#/" aria-label="Voca ana sayfa"><span>voca</span><i></i></a>
+  <nav class="ust-nav" aria-label="Ana menü">
+    <a href="#/ara" data-yol="ara">Ara</a>
+    <a href="#/liste" data-yol="liste">Kelimelerim</a>
+    <a href="#/pratik" data-yol="pratik">Pratik</a>
+    <a href="#/video" data-yol="video">Video</a>
+  </nav>
+  <a class="ust-ben" id="ben" href="#/hesap"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 19.5c1.2-3.4 4-5.2 7.2-5.2s6 1.8 7.2 5.2"/></svg><span id="benYazi">Hesap</span></a>
+</header>
+<main id="uyg" tabindex="-1"></main>
+<nav class="alt-nav" aria-label="Alt menü">
+  <a href="#/ara" data-yol="ara"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg><span>Ara</span></a>
+  <a href="#/liste" data-yol="liste"><svg viewBox="0 0 24 24"><path d="M5 6h14M5 12h14M5 18h9"/></svg><span>Kelimelerim</span></a>
+  <a href="#/pratik" data-yol="pratik"><svg viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></svg><span>Pratik</span></a>
+  <a href="#/video" data-yol="video"><svg viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="12" rx="2.5"/><path d="M10.5 9.5v5l4-2.5z"/></svg><span>Video</span></a>
+  <a href="#/hesap" data-yol="hesap" id="altBen"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 19.5c1.2-3.4 4-5.2 7.2-5.2s6 1.8 7.2 5.2"/></svg><span id="altBenYazi">Hesap</span></a>
+</nav>
+<div class="bildirim" id="bildirim" role="status" aria-live="polite"></div>
+<script type="module" src="/uyg.js"></script>
+</body>
+</html>

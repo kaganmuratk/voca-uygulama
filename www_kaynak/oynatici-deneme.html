@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Oynatıcı denemesi</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0d0d0f; color: #f1f0ec; font: 16px/1.5 system-ui, sans-serif; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.not { color: #b1aea7; font-size: 14px; margin: 0 0 20px; }
+  .deneme { margin: 0 0 32px; }
+  .deneme h2 { font-size: 16px; margin: 0 0 8px; }
+  .deneme h2 b { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #7f7cff; color: #0d0d0f; margin-right: 8px; }
+  .ekran { position: relative; aspect-ratio: 16/9; background: #000; border-radius: 10px; overflow: hidden; }
+  .ekran > div, .ekran iframe { position: absolute; left: 0; width: 100%; top: -72px; height: calc(100% + 144px); border: 0; pointer-events: none; }
+  .kapak { position: absolute; inset: 0; background: #000 center/cover; transition: opacity .2s; pointer-events: none; }
+  .kapak.gizli { opacity: 0; }
+  .alt { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  button { height: 44px; padding: 0 18px; border-radius: 999px; border: 1px solid #333; background: #1c1c20; color: #f1f0ec; font: 600 15px system-ui; }
+  .durum { font: 12px ui-monospace, monospace; color: #75726c; }
+</style>
+</head>
+<body>
+<h1>Oynatıcı denemesi</h1>
+<p class="not">Her birinde "Oynat"a bas, klip bitene kadar izle. Ekranda YouTube'un herhangi bir simgesi (durdur, oynat, ses, başlık) göründü mü? Görünmeyenlerin numarasını yaz.</p>
+<div id="liste"></div>
+<script>
+const YONTEM = [
+  { ad: 'Şu anki yöntem (çerezsiz sunucu)', host: 'https://www.youtube-nocookie.com', hep: false },
+  { ad: 'Normal youtube.com sunucusu', host: 'https://www.youtube.com', hep: false },
+  { ad: 'Hep oynayan (sessiz döngü, basınca ses açılır) · çerezsiz', host: 'https://www.youtube-nocookie.com', hep: true },
+  { ad: 'Hep oynayan · normal sunucu', host: 'https://www.youtube.com', hep: true },
+];
+let KLIP;
+const durum = (n, m) => { document.querySelector(`#d${n}`).textContent = m; };
+function kur(y, n) {
+  const kutu = document.createElement('div');
+  kutu.className = 'deneme';
+  kutu.innerHTML = `<h2><b>${n + 1}</b>${y.ad}</h2>
+    <div class="ekran"><div id="o${n}"></div><div class="kapak" id="k${n}" style="background-image:url(https://i.ytimg.com/vi/${KLIP.v}/hqdefault.jpg)"></div></div>
+    <div class="alt"><button id="b${n}">▶ Oynat</button><span class="durum" id="d${n}">hazırlanıyor</span></div>`;
+  document.querySelector('#liste').appendChild(kutu);
+  const kapak = (g) => document.querySelector(`#k${n}`).classList.toggle('gizli', !g);
+  let izle = null, hazir = false;
+  const o = new YT.Player(`o${n}`, {
+    videoId: KLIP.v, host: y.host,
+    playerVars: { start: Math.floor(KLIP.bas), autoplay: y.hep ? 1 : 0, mute: y.hep ? 1 : 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1, cc_load_policy: 0, hl: 'en', modestbranding: 1 },
+    events: {
+      onReady: () => { hazir = true; durum(n, 'hazır'); if (y.hep) { o.mute(); o.seekTo(KLIP.bas, true); o.playVideo(); } },
+      onStateChange: (ev) => {
+        clearInterval(izle);
+        if (ev.data === 1) izle = setInterval(() => {
+          const t = o.getCurrentTime();
+          if (t >= KLIP.son) {
+            if (y.hep) { o.seekTo(KLIP.bas, true); if (!o.isMuted()) { o.mute(); kapak(true); durum(n, 'bitti (arkada sessiz dönüyor)'); } }
+            else { o.pauseVideo(); kapak(true); durum(n, 'bitti'); }
+          }
+        }, 80);
+      },
+    },
+  });
+  document.querySelector(`#b${n}`).onclick = () => {
+    if (!hazir) return;
+    o.seekTo(KLIP.bas, true);
+    if (y.hep) { o.unMute(); kapak(false); durum(n, 'oynuyor'); }
+    else { o.playVideo(); kapak(false); durum(n, 'oynuyor'); }
+  };
+}
+window.onYouTubeIframeAPIReady = async () => {
+  const v = await (await fetch('/api/kelime/coherent')).json();
+  KLIP = v.klipler[0];
+  YONTEM.forEach(kur);
+};
+const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+</script>
+</body>
+</html>
