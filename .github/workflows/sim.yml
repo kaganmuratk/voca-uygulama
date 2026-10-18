@@ -1,0 +1,59 @@
+name: Simulator testi
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  sim:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Test betiğini sayfaya ekle
+        run: |
+          sed -i '' 's#</body>#<script type="module" src="/sim-test.js"></script></body>#' www/index.html
+          grep -c sim-test www/index.html
+      - run: npx cap sync ios
+      - name: ATS (yerel günlük sunucusu için)
+        run: /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" ios/App/App/Info.plist
+      - name: Simülatör için derle
+        run: |
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build 2>&1 | tail -5
+      - name: Simülatörü aç
+        run: |
+          xcrun simctl list devices available | grep -i iphone | tail -8
+          DEV=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']; best=None
+          for rt,l in d.items():
+            if 'iOS' not in rt: continue
+            for x in l:
+              if 'iPhone' in x['name'] and ('15' in x['name'] or '16' in x['name']) and 'Pro' not in x['name'] and 'Plus' not in x['name'] and 'Max' not in x['name']: best=x['udid']
+          print(best)")
+          echo "DEV=$DEV" >> $GITHUB_ENV
+          xcrun simctl boot $DEV
+          xcrun simctl bootstatus $DEV -b
+          xcrun simctl install $DEV build/Build/Products/Debug-iphonesimulator/App.app
+      - name: Test (video kaydı + günlük + ekran görüntüleri)
+        run: |
+          mkdir -p out/shots
+          nohup python3 scripts/logsunucu.py > /dev/null 2>&1 &
+          sleep 1
+          xcrun simctl io $DEV recordVideo --codec h264 out/rec.mp4 > out/rec.log 2>&1 &
+          REC=$!
+          sleep 3
+          xcrun simctl launch $DEV tr.com.revelalabs.vocadeney
+          for i in $(seq 1 100); do xcrun simctl io $DEV screenshot out/shots/s$(printf %03d $i).png > /dev/null 2>&1; sleep 2; if grep -q '"olay": *"bitti"' log.jsonl 2>/dev/null; then break; fi; done
+          sleep 3
+          kill -INT $REC; sleep 4
+          cp log.jsonl out/ 2>/dev/null || true
+          ls -la out | head
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sim-sonuc
+          path: out

@@ -1,0 +1,12 @@
+{
+  "appId": "tr.com.revelalabs.vocadeney",
+  "appName": "Voca Deney",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "always",
+    "appendUserAgent": "VocaApp"
+  },
+  "android": {
+    "appendUserAgent": "VocaApp"
+  }
+}
