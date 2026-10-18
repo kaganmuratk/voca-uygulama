@@ -2,6 +2,8 @@
 // kelimeye dokununca anlamı çıkar, listene ekle. Altyazı sunucudan gelir (/api/altyazi, src/altyazi.js); oynatıcı ve görünüm
 // kelime klipleriyle aynı (klip.js): YouTube'un kendi düğmeleri ve alt yazısı kapalı, kontroller bizim.
 import { ytYukle, kokBul, ogrenmeyeDeger, sesKontrolu } from './klip.js';
+import { PAKET } from './ortam.js';
+import { ALTYAZI_TELEFON, altyaziTelefondan } from './altyazi-telefon.js';
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const sure = (t) => { t = Math.max(0, Math.floor(t || 0)); const s = t % 60, d = Math.floor(t / 60) % 60, sa = Math.floor(t / 3600); return (sa ? sa + ':' + String(d).padStart(2, '0') : d) + ':' + String(s).padStart(2, '0'); };
@@ -67,7 +69,7 @@ export function videoSayfasi(kap, { dizin, ac, istek, ekle, girisli, girisGerekl
     if (!girisli()) return girisGerekli();
     kartKapat(); durum('Altyazı alınıyor…'); $('.vid').hidden = true;
     let d;
-    try { d = await istek('/altyazi?v=' + id); } catch (x) { durum(x.message === 'giriş' ? '' : (x.message || 'Altyazı alınamadı.')); return; }
+    try { d = PAKET && ALTYAZI_TELEFON ? await altyaziTelefondan(id) : await istek('/altyazi?v=' + id); } catch (x) { durum(x.message === 'giriş' ? '' : (x.message || 'Altyazı alınamadı.')); return; }
     if (d.yok) { durum('Bu videonun İngilizce altyazısı yok. İngilizce altyazılı bir video dene.'); return; }
     satirlar = d.satirlar || []; sira = -1; uzunluk = d.sure || 0;
     durum('');
