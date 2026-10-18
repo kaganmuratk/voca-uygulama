@@ -9,7 +9,8 @@ const kaynak = (vid) => { let x = 0; for (const c of vid) x = (x * 31 + c.charCo
 v.src = kaynak(id); v.loop = true; v.muted = false;
 const rv = () => v.requestVideoFrameCallback?.(() => { kare++; rv(); }); rv();
 v.addEventListener('playing', () => { durum = 1; }); v.addEventListener('pause', () => { durum = 2; }); v.addEventListener('waiting', () => { durum = 3; });
-v.addEventListener('loadeddata', () => parent.postMessage({ voca: 1, tur: 'hazir' }, '*'));
+let hz = false; const hazir = () => { if (hz) return; hz = true; parent.postMessage({ voca: 1, tur: 'hazir' }, '*'); };
+v.addEventListener('loadedmetadata', hazir); setTimeout(hazir, 1200);   // iOS ön yüklemeyi (preload) yok sayar: YouTube onReady'si de veriden bağımsızdır
 if (a) v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
 addEventListener('message', (e) => { const m = e.data || {}; if (m.komut === 'oynat') v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); if (m.komut === 'durdur') v.pause(); if (m.komut === 'yukle') { v.src = kaynak(m.v); v.currentTime = m.bas || 0; v.play().catch(() => {}); } if (m.komut === 'ses') v.volume = m.n / 100; if (m.komut === 'sessiz') v.muted = !!m.b; if (m.komut === 'git') v.currentTime = m.t; });
 setInterval(() => parent.postMessage({ voca: 1, tur: 'zaman', t: v.currentTime, durum: v.paused ? (v.readyState < 3 ? 3 : 2) : (v.readyState < 3 ? 3 : 1), sure: v.duration || 0, hiz: 1, ses: v.muted, kare }, '*'), 150);
