@@ -14,7 +14,7 @@ const snap = (etiket) => {
   const pp = (window.__akisP || []).map((x) => ({ rol: x.rol, hz: x.hazir, oh: x.onHazir, ms: x.sessiz, st: x.oyn?.getPlayerState?.(), kare: x.oyn?.kare, t: +(x.oyn?.getCurrentTime?.() || 0).toFixed(1), id: x.id }));
   const sahneW = [...document.querySelectorAll('.akis-sahne')].map((x) => Math.round(x.getBoundingClientRect().width));
   const kart = document.querySelector('.akis-kart.oynuyor, .akis-kart.yukleniyor, .akis-kart.durdu');
-  const dbg = [...document.querySelectorAll('.akis-dbg')].map((x) => x.textContent).find(Boolean) || '';
+  const dbg = kart?.querySelector('.akis-dbg')?.textContent || '';
   const kapak = kart?.querySelector('.akis-kapak'); const satir = kart?.querySelector('.akis-satir')?.textContent?.trim().slice(0, 50) || '';
   const hata = kart?.querySelector('.akis-durum')?.textContent || '';
   return { olay: 'snap', asama, etiket, sr, pp, sahneW: sahneW.slice(0, 3), kart: kart ? kart.className.replace('akis-kart', '').trim() : '-', id: kart?.dataset.id, kat, kapakOp: kapak ? getComputedStyle(kapak).opacity : null, dbg, satir, hata };
