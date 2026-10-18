@@ -6,7 +6,7 @@ import { akisSayfasi, akisIsit } from './akis.js';
 import { kendiAkis } from './akis-kendi.js';
 import { yerelOku, yerelYaz } from './yerel.js';
 import { ayarOku as hatAyarOku, ayarYaz as hatAyarYaz, hatirlatmaUygula, hatirlatmaVar } from './hatirlatma.js';
-import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz } from './ortam.js';
+import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz, jsonAl } from './ortam.js';
 import { videoSayfasi } from './video.js';
 let klipTemizle = () => {};
 const $ = (s, k = document) => k.querySelector(s);
@@ -648,7 +648,11 @@ async function akisAc() {
   const ortak = { dizin: DIZIN, istek, bildir, girisGerekli, girisli: () => !!BEN, ekle: async (w) => { await istek('/kelimeler', { method: 'POST', govde: { kelimeler: [w] } }); bildir('Listene eklendi.'); } };
   // Kendi sunucumuzdaki videolar varsa onlar (anında geçiş); yoksa ya da #/video/yt ise YouTube akışı
   let kendi = [];
-  if (!location.hash.startsWith('#/video/yt')) { try { const r = await fetch((PAKET ? SITE : '') + '/akis-kendi.json', { cache: 'no-cache' }); if (r.ok) kendi = await r.json(); } catch { /* ağ yok: YouTube akışı */ } }
+  if (!location.hash.startsWith('#/video/yt')) {
+    kendi = (await jsonAl('/akis-kendi.json')) || [];
+    if (!kendi.length && PAKET) { try { kendi = await (await fetch('/akis-kendi.json')).json(); } catch { /* pakette de yok */ } }   // ağ yoksa pakette gelen son liste
+    if (!Array.isArray(kendi)) kendi = [];
+  }
   klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, videolar: kendi }) : akisSayfasi(uyg.firstElementChild, ortak);
 }
 async function videoAc() {

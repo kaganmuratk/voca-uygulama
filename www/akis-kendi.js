@@ -2,7 +2,7 @@
 // Sıradaki 2 video önceden yüklenir ve ilk karede bekler (kaydırınca anında), uzaktakilerin kaynağı bırakılır (iOS aynı anda az video çözücü verir).
 // Altyazı videonun ÜSTÜNDE, aşağı-yukarı sürüklenebilir (konum hatırlanır); kelimeye dokununca ilk anlam. Altyazı: build'te hazırlanmış /akis-altyazi/<id>.json.
 import { kokBul, ogrenmeyeDeger } from './klip.js';
-import { SITE, PAKET } from './ortam.js';
+import { SITE, PAKET, jsonAl } from './ortam.js';
 import { kisalt } from './akis.js';
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -40,8 +40,8 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   const altyaziAl = (id) => {
     if (altyaziOnbellek.has(id)) return altyaziOnbellek.get(id);
     const yol = '/akis-altyazi/' + id + '.json';   // uygulamada pakette hazır; yoksa sunucudan
-    const al = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-    const p = al(yol).then((d) => d || (PAKET ? al(SITE + yol) : null)).then((d) => d || { yok: true });
+    const yerel = fetch(yol).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const p = yerel.then((d) => d || (PAKET ? jsonAl(yol) : null)).then((d) => d || { yok: true });
     altyaziOnbellek.set(id, p); return p;
   };
 
