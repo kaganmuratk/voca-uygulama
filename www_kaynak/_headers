@@ -1,2 +1,11 @@
 /api/*
   X-Robots-Tag: noindex, nofollow
+/akis-video/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=86400
+/akis-altyazi/*
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600
+/akis-kendi.json
+  Access-Control-Allow-Origin: *
+  Cache-Control: no-cache
