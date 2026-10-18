@@ -2,6 +2,7 @@
 // Ara ve kelime sayfaları girişsiz de açılır; liste, ekleme ve pratik giriş ister.
 import { bicimRegex, kacis } from './bicim.js';
 import { klipOynatici } from './klip.js';
+import { akisSayfasi } from './akis.js';
 import { PAKET, sunucuAdresi, apiIstek, jetonYaz } from './ortam.js';
 import { videoSayfasi } from './video.js';
 let klipTemizle = () => {};
@@ -100,7 +101,8 @@ const YOLLAR = [
   [/^#\/pratik\/rapor\/(\d+)$/, (m) => pratikRapor(+m[1])],
   [/^#\/gecmis$/, () => git('#/pratik')], // Geçmiş artık Pratik ekranında
   [/^#\/k\/(.+)$/, (m) => ogren(decodeURIComponent(m[1]))],
-  [/^#\/video$/, videoAc],
+  [/^#\/video$/, akisAc],
+  [/^#\/video\/link$/, videoAc],
   [/^#\/giris$/, giris],
   [/^#\/hesap$/, hesap],
 ];
@@ -602,6 +604,15 @@ async function ogren(ad) {
 // ——— KELİMELERİM ———
 let listeFiltre = { q: '', g: 'tum', s: '', sr: 'yeni' };
 // Videodan kelime (Kağan, 2026-10-15): herhangi bir YouTube videosu + bizim altyazı + kelimeye dokun
+// Video keşfet akışı (v0): tam ekran dikey kaydırmalı kısa videolar
+async function akisAc() {
+  await dizin();
+  uyg.innerHTML = '<section class="sayfa-akis"></section>';
+  klipTemizle = akisSayfasi(uyg.firstElementChild, {
+    dizin: DIZIN, istek, bildir, girisGerekli, girisli: () => !!BEN,
+    ekle: async (w) => { await istek('/kelimeler', { method: 'POST', govde: { kelimeler: [w] } }); bildir('Listene eklendi.'); },
+  });
+}
 async function videoAc() {
   await dizin();
   uyg.innerHTML = '<section class="dar sayfa-video"></section>';
