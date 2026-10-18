@@ -3,7 +3,7 @@
 import { bicimRegex, kacis } from './bicim.js';
 import { klipOynatici } from './klip.js';
 import { akisSayfasi, akisIsit } from './akis.js';
-import { kendiAkis } from './akis-kendi.js';
+import { kendiAkis, akisOnYukle, kayitlariOku } from './akis-kendi.js';
 import { yerelOku, yerelYaz } from './yerel.js';
 import { ayarOku as hatAyarOku, ayarYaz as hatAyarYaz, hatirlatmaUygula, hatirlatmaVar } from './hatirlatma.js';
 import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz, jsonAl } from './ortam.js';
@@ -132,6 +132,7 @@ const YOLLAR = [
   [/^#\/k\/(.+)$/, (m) => ogren(decodeURIComponent(m[1]))],
   [/^#\/video$/, akisAc],
   [/^#\/video\/yt$/, akisAc],
+  [/^#\/video\/ac\/([\w-]{11})$/, (m) => akisAc(m[1])],
   [/^#\/video\/link$/, videoAc],
   [/^#\/giris$/, giris],
   [/^#\/hesap$/, hesap],
@@ -237,6 +238,11 @@ async function hesap() {
     </section>
 
     <section class="ayar-grup">
+      <div class="bolum-bas"><h2>Kaydedilen videolar</h2></div>
+      <div id="kayitSirasi" class="kayit-sirasi"><p class="kayit-bos">Yükleniyor…</p></div>
+    </section>
+
+    <section class="ayar-grup">
       <div class="bolum-bas"><h2>Giriş bilgileri</h2></div>
       <div class="ayar-satir acilir" id="aEposta">
         <div class="ayar-ad"><b>E-posta</b><span>${e(BEN.ad)}</span></div><button class="btn hayalet kucuk ac">Değiştir</button>
@@ -273,6 +279,12 @@ async function hesap() {
     </section>
   </div>`;
   $('#tema').onchange = (ev) => { try { localStorage.setItem('voca-tema', ev.target.value); } catch {} temaUygula(ev.target.value); };
+  kayitlariOku(BEN.ad).then((l) => {
+    const kutu = $('#kayitSirasi'); if (!kutu) return;
+    kutu.innerHTML = l.length
+      ? l.map((v) => `<a class="kayit-kart" href="#/video/ac/${v.id}"><img src="${e(sunucuAdresi(v.kapak))}" alt="" loading="lazy"><span>${e(v.baslik)}</span></a>`).join('')
+      : '<p class="kayit-bos">Henüz video kaydetmedin. Video akışında Kaydet düğmesine dokun.</p>';
+  });
   if ($('#hatAc')) {
     const uygula = async (ayar) => { const r = await hatirlatmaUygula(ayar).catch((x) => ({ tamam: false, mesaj: x.message })); bildir(r.mesaj); if (!r.tamam) { ayar.acik = false; } hatAyarYaz(ayar); $('#hatAc').textContent = ayar.acik ? 'Açık' : 'Kapalı'; $('#hatAc').classList.toggle('hayalet', !ayar.acik); };
     $('#hatAc').onclick = () => uygula({ ...hatAyarOku(), acik: !hatAyarOku().acik });
@@ -642,7 +654,7 @@ async function ogren(ad) {
 let listeFiltre = { q: '', g: 'tum', s: '', sr: 'yeni' };
 // Videodan kelime (Kağan, 2026-10-15): herhangi bir YouTube videosu + bizim altyazı + kelimeye dokun
 // Video keşfet akışı (v0): tam ekran dikey kaydırmalı kısa videolar
-async function akisAc() {
+async function akisAc(baslangic) {
   await dizin();
   uyg.innerHTML = '<section class="sayfa-akis"></section>';
   const ortak = { dizin: DIZIN, istek, bildir, girisGerekli, girisli: () => !!BEN, ekle: async (w) => { await istek('/kelimeler', { method: 'POST', govde: { kelimeler: [w] } }); bildir('Listene eklendi.'); } };
@@ -653,7 +665,7 @@ async function akisAc() {
     if (!kendi.length && PAKET) { try { kendi = await (await fetch('/akis-kendi.json')).json(); } catch { /* pakette de yok */ } }   // ağ yoksa pakette gelen son liste
     if (!Array.isArray(kendi)) kendi = [];
   }
-  klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, videolar: kendi }) : akisSayfasi(uyg.firstElementChild, ortak);
+  klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, videolar: kendi, kullanici: () => BEN?.ad || '', baslangic: typeof baslangic === 'string' ? baslangic : '' }) : akisSayfasi(uyg.firstElementChild, ortak);
 }
 async function videoAc() {
   await dizin();
@@ -1204,4 +1216,4 @@ async function pratikRapor(id, yarida = false) {
 // PWA
 if (!PAKET && 'serviceWorker' in navigator && location.hostname !== 'localhost') navigator.serviceWorker.register('/sw.js').catch(() => {});
 yonlendir();
-if (PAKET) setTimeout(() => { if (hatAyarOku().acik) hatirlatmaUygula().catch(() => {}); }, 4000);   // 14 günlük pencereyi her açılışta yenile   // ilk video açılışı beklemesin
+if (PAKET) setTimeout(() => { if (hatAyarOku().acik) hatirlatmaUygula().catch(() => {}); if (!location.hash.startsWith('#/video')) akisOnYukle(); }, 4000);   // 14 günlük bildirim penceresi + akışın ilk 2 videosu önceden   // 14 günlük pencereyi her açılışta yenile   // ilk video açılışı beklemesin
