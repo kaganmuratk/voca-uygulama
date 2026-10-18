@@ -941,23 +941,26 @@ body:not(.uygulama) .listede, .sesler:empty { display: none; }
 .akis-ust { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 4px 8px; }
 .akis-baslik { font: 400 28px/1 var(--serif); }
 .akis-link { font-size: 14px; color: var(--m2); text-decoration: underline; text-underline-offset: 3px; }
-.akis-liste { flex: 1; min-height: 0; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.akis-liste { flex: 1; min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
 .akis-liste::-webkit-scrollbar { display: none; }
 .akis-bos { padding: 40px 8px; color: var(--m2); text-align: center; }
-.akis-kart { height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; gap: 10px; padding-bottom: 6px; }
+.akis-kart { width: 100%; min-width: 0; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; gap: 10px; padding-bottom: 6px; }
 .akis-sahne { position: relative; flex: 1; min-height: 0; background: #000; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .akis-kapak { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; object-fit: cover; background: #000; transition: opacity .25s; }
-.akis-yt { position: absolute; inset: 0; z-index: 1; }
-.akis-yt iframe { width: 100%; height: 100%; border: 0; display: block; }
-.akis-kart.oynuyor .akis-kapak { opacity: 0; pointer-events: none; }
+.akis-liste { position: relative; }
+.akis-tap { position: absolute; inset: 0; z-index: 4; }
+.akis-katman { position: absolute; z-index: 3; pointer-events: none; visibility: hidden; background: #000; border-radius: 12px; overflow: hidden; }
+.akis-katman.gorunur { visibility: visible; }
+.akis-katman > div, .akis-katman iframe { width: 100%; height: 100%; border: 0; display: block; }
+.akis-kapak { pointer-events: none; }
 .akis-dbg { margin: 2px 0 0; font: 11px/1.2 monospace; color: var(--m3); }
-.akis-oyna { position: absolute; inset: 0; z-index: 3; display: none; place-items: center; background: rgba(0,0,0,.25); border: 0; color: #fff; cursor: pointer; }
+.akis-oyna { position: absolute; inset: 0; z-index: 5; display: none; place-items: center; background: rgba(0,0,0,.25); border: 0; color: #fff; cursor: pointer; }
 .akis-kart.durdu .akis-oyna { display: grid; }
-.akis-bekle { position: absolute; inset: 0; z-index: 3; display: none; place-items: center; }
+.akis-bekle { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: none; place-items: center; }
 .akis-kart.yukleniyor .akis-bekle { display: grid; }
-.akis-durum { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 4; margin: 0; padding: 10px 12px; background: rgba(0,0,0,.72); color: #fff; border-radius: 8px; font-size: 14px; }
-.akis-alt { min-height: 96px; }
-.akis-satir { min-height: 2.6em; margin: 0; font-size: 20px; line-height: 1.35; }
-.akis-bilgi { margin: 6px 0 0; font-size: 12.5px; color: var(--m2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.akis-durum { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 6; margin: 0; padding: 10px 12px; background: rgba(0,0,0,.72); color: #fff; border-radius: 8px; font-size: 14px; }
+.akis-alt { min-height: 96px; min-width: 0; width: 100%; }
+.akis-satir { height: 2.8em; overflow: hidden; margin: 0; font-size: 20px; line-height: 1.35; }
+.akis-bilgi { max-width: 100%; margin: 6px 0 0; font-size: 12.5px; color: var(--m2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .akis-sozluk { margin-top: 8px; }
 .akis-sozluk .ks-ilk { margin: 4px 0 0; font-size: 17px; }

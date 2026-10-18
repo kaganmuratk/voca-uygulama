@@ -27,7 +27,7 @@ export class KopruOyuncu {
       else if (m.tur === 'hata') this.olay.onError?.({ data: m.kod });
       else if (m.tur === 'zaman') {
         const onceki = this.k.durum;
-        this.k = { t: m.t, durum: m.durum, sure: m.sure, hiz: m.hiz }; this.zT = performance.now(); this.mesaj++;
+        this.k = { t: m.t, durum: m.durum, sure: m.sure, hiz: m.hiz }; if (typeof m.ses === 'boolean') this.sessiz = m.ses; this.zT = performance.now(); this.mesaj++;
         if (m.durum !== onceki) this.olay.onStateChange?.({ data: m.durum, target: this });
       }
     };

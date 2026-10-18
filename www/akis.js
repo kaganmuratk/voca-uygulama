@@ -7,6 +7,21 @@ import { ALTYAZI_TELEFON, altyaziTelefondan } from './altyazi-telefon.js';
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Uzun altyazı satırlarını (23 kelimeye kadar çıkıyor) en çok iki ekran satırına sığacak parçalara böl: yerleşim zıplamasın, kelime kesilmesin.
+const SATIR_MAX = 62;
+export function kisalt(satirlar) {
+  const uzun = (k) => k.map((x) => x[0]).join(' ').length > SATIR_MAX;
+  const bol = (s) => {
+    if (!uzun(s.k) || s.k.length < 2) return [s];
+    let en = 1, fark = Infinity;
+    const top = s.k.map((x) => x[0]).join(' ').length;
+    for (let i = 1, uz = 0; i < s.k.length; i++) { uz += s.k[i - 1][0].length + 1; const f = Math.abs(uz - top / 2); if (f < fark) { fark = f; en = i; } }
+    const a = { bas: s.bas, son: Math.min(s.son, s.k[en][1]), k: s.k.slice(0, en) }, b = { bas: s.k[en][1], son: s.son, k: s.k.slice(en) };
+    return [...bol(a), ...bol(b)];
+  };
+  return satirlar.flatMap(bol);
+}
+
 function sirala(liste) {
   const k = liste.map((x) => ({ x, r: Math.random() })).sort((a, b) => a.r - b.r).map((o) => o.x);
   const sonuc = [];
@@ -30,11 +45,19 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   const HATA_AYIKLA = PAKET; // deney sürümünde küçük tanı satırı (t, durum, satır, mesaj sayısı); kararlı olunca kapatılır
   const altyaziOnbellek = new Map();
 
-  const altyaziAl = async (id) => {
+  // Altyazı önce build'te hazırlanmış statik dosyadan (/akis-altyazi/<id>.json: anında, YouTube'a gitmez); yoksa eski yol (telefon/sunucu).
+  const altyaziAl = (id) => {
     if (altyaziOnbellek.has(id)) return altyaziOnbellek.get(id);
-    const d = PAKET && ALTYAZI_TELEFON ? await altyaziTelefondan(id) : await istek('/altyazi?v=' + id, { sessiz: true });
-    altyaziOnbellek.set(id, d);
-    return d;
+    const p = (async () => {
+      try {
+        const r = await fetch('/akis-altyazi/' + id + '.json');
+        if (r.ok) { const d = await r.json(); if (Array.isArray(d.satirlar) && d.satirlar.length) return d; }
+      } catch { /* statik yok: eski yola düş */ }
+      return PAKET && ALTYAZI_TELEFON ? altyaziTelefondan(id) : istek('/altyazi?v=' + id, { sessiz: true });
+    })();
+    altyaziOnbellek.set(id, p);
+    p.then((d) => { if (d?.hata) altyaziOnbellek.delete(id); }, () => altyaziOnbellek.delete(id));   // hata kalıcı olmasın
+    return p;
   };
   const kartEl = (i) => liste.children[i];
   const durum = (i, m) => { const el = kartEl(i)?.querySelector('.akis-durum'); if (el) { el.textContent = m || ''; el.hidden = !m; } };
@@ -64,52 +87,133 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
     su?.classList.add('su-an');
   };
 
+  // İKİ kalıcı oynatıcı (Kağan 2026-10-18: "bekleme/beyaz ekran istemiyorum"): biri oynar, diğeri sıradaki videoyu sessiz/duraklatılmış önceden yükler.
+  // Kaydırınca hazır olan oynatıcı hemen devralır (anında başlar); hazır değilse etkin oynatıcıya loadVideoById (iframe yeniden kurulmaz).
+  // Oynatıcılar listenin içinde kayan üst katmandır; oynamaya başlayana kadar gizli, altta kapak görünür (beyaz ekran olmaz).
+  const yeniP = () => ({ oyn: null, katman: null, hazir: false, id: '', rol: 'bos', onHazir: false, sessiz: false, bekleyen: null });
+  const P = [yeniP(), yeniP()]; let ai = 0, kart = null, benim = 0, gecis = false, onYuklendi = false, katman = null;
+  const akt = () => P[ai], yed = () => P[1 - ai];
+  const katmanKonumla = () => {
+    const k = kartEl(aktif)?.querySelector('.akis-sahne'), p = akt(); if (!k || !p.katman) return;
+    Object.assign(p.katman.style, { top: k.offsetTop + 'px', left: k.offsetLeft + 'px', width: k.offsetWidth + 'px', height: k.offsetHeight + 'px' });
+  };
+  const baslat = (v) => {   // aktif oynatıcıda video başlat (sıfırdan yükle)
+    const p = akt(); gecis = true; p.id = v.id; p.onHazir = false;
+    if (p.sessiz) { try { p.oyn.unMute(); p.sessiz = false; } catch { /* yok */ } }
+    try { p.oyn.loadVideoById({ videoId: v.id, startSeconds: 0 }); } catch { /* hazır değil */ }
+  };
+  const kur = async (p, id, otomatik) => {
+    await ytYukle();
+    if (p.oyn) return;
+    p.katman = document.createElement('div'); p.katman.className = 'akis-katman'; const ic = document.createElement('div'); p.katman.append(ic); liste.append(p.katman);
+    p.id = id;
+    p.oyn = new YT.Player(ic, {
+      videoId: id, host: 'https://www.youtube-nocookie.com',
+      playerVars: { autoplay: otomatik ? 1 : 0, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1, cc_load_policy: 0, cc_lang_pref: 'en', hl: 'en', modestbranding: 1 },
+      events: {
+        onReady: () => {
+          p.hazir = true;
+          if (p.bekleyen && p.bekleyen.id !== p.id) { const v2 = p.bekleyen; p.bekleyen = null; if (p.rol === 'aktif') baslat(v2); else onYukle(v2); }
+          else if (p.rol === 'aktif') { try { p.oyn.playVideo(); } catch { /* hazır değil */ } }
+          else if (p.rol === 'onyukleme') { try { p.oyn.mute(); p.sessiz = true; p.oyn.playVideo(); } catch { /* hazır değil */ } }
+        },
+        onStateChange: (ev) => {
+          if (p.rol === 'onyukleme') {   // arkada hazırlanan: ilk karede dur, başa sar, bekle
+            if (ev.data === 1) { try { p.oyn.pauseVideo(); p.oyn.seekTo(0, true); } catch { /* yok */ } p.onHazir = true; }
+            return;
+          }
+          if (p.rol !== 'aktif' || !kart) return;
+          if (gecis && ev.data !== 1) return;   // yeni videoya geçerken eskinin kalıntı olaylarını yoksay
+          if (ev.data === 1) {
+            gecis = false; p.katman.classList.add('gorunur'); kart.classList.remove('yukleniyor', 'durdu'); kart.classList.add('oynuyor'); clearInterval(izleyici); izleyici = setInterval(tik, 80);
+            if (!onYuklendi) { onYuklendi = true; onHazirla(aktif); }
+          }
+          else if (ev.data === 0) { try { p.oyn.seekTo(0, true); p.oyn.playVideo(); } catch { /* bitti */ } }
+          else if (ev.data === 2) { kart.classList.add('durdu'); clearInterval(izleyici); tik(); }
+        },
+        onError: (ev) => {
+          if (p.rol !== 'aktif') { p.onHazir = false; p.id = ''; return; }   // arkadaki bozuksa o kartta normal yoldan denenir
+          if (!kart) return; const i = aktif, bn = benim; kart.classList.remove('yukleniyor');
+          durum(i, ev.data === 101 || ev.data === 150 ? 'Bu videonun sahibi başka yerlerde oynatılmasına izin vermiyor, sonrakine geçiliyor…' : 'Video oynatılamadı, sonrakine geçiliyor…');
+          setTimeout(() => { if (bn === sayac) kartEl(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 1200);
+        },
+      },
+    });
+  };
+  // Hızlı yolda sesi açma tutmadıysa (iPhone kullanıcı dokunuşu ister) video sessiz oynar: sıfırdan sesli yükle, olmazsa kullanıcıya söyle
+  const sesDenetle = (p, bn, v, i) => setTimeout(() => {
+    if (bn !== sayac || p.rol !== 'aktif' || !p.oyn.isMuted?.()) return;
+    try { p.oyn.unMute(); p.sessiz = false; } catch { /* yok */ }
+    setTimeout(() => { if (bn === sayac && p.rol === 'aktif' && p.oyn.isMuted?.()) durum(i, 'Ses kapalı. Açmak için videoya dokun.'); }, 700);
+  }, 900);
+  // sıradaki videoyu yedek oynatıcıda önceden yükle (sessiz, ilk karede durur)
+  function onYukle(v) {
+    const p = yed(); if (p.id === v.id && p.onHazir) return;
+    p.rol = 'onyukleme'; p.onHazir = false; p.id = v.id;
+    if (!p.oyn) { kur(p, v.id, false); return; }   // hazır olunca sessiz oynatıp ilk karede durdurur
+    if (!p.hazir) { p.bekleyen = v; return; }
+    try { p.oyn.mute(); p.sessiz = true; p.oyn.loadVideoById({ videoId: v.id, startSeconds: 0 }); } catch { /* yok */ }
+  }
+
   function birak() {
     clearInterval(izleyici); izleyici = null;
-    try { oyn?.destroy(); } catch { /* oynatıcı yok */ }
-    oyn = null; satirlar = []; sira = -1;
+    const p = akt(); try { p.oyn?.pauseVideo(); } catch { /* yok */ }
+    p.katman?.classList.remove('gorunur');
+    satirlar = []; sira = -1;
     const eski = kartEl(aktif);
-    if (eski) { eski.classList.remove('oynuyor', 'durdu'); eski.querySelector('.akis-yt').replaceChildren(); eski.querySelector('.akis-satir').innerHTML = ''; durum(aktif, ''); }
+    if (eski) { eski.classList.remove('oynuyor', 'durdu'); eski.querySelector('.akis-satir').innerHTML = ''; durum(aktif, ''); }
     sozlukKapat();
   }
+
+  // sıradaki videonun yedekte yüklenmesi + kapak ve altyazı önbelleği; altyazısız videoyu ona gelmeden listeden çıkar
+  const onHazirla = (i) => {
+    if (videolar[i + 1]) onYukle(videolar[i + 1]);
+    for (const n of [i + 1, i + 2, i + 3]) {
+      const v = videolar[n]; if (!v) continue;
+      if (n <= i + 2) { const im = new Image(); im.src = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`; }
+      if (altyaziOnbellek.has(v.id)) continue;
+      altyaziAl(v.id).then((d) => {
+        if (!d || !d.yok) return;
+        const k = liste.querySelector(`.akis-kart[data-id="${v.id}"]`); const idx = k ? [...liste.children].indexOf(k) : -1;
+        if (idx > aktif) { k.remove(); videolar.splice(videolar.findIndex((x) => x.id === v.id), 1); }
+      }).catch(() => {});
+    }
+  };
 
   async function etkinles(i) {
     if (i === aktif) return;
     birak();
-    aktif = i; const benim = ++sayac; const v = videolar[i]; const kart = kartEl(i);
+    aktif = i; const bn = ++sayac; benim = bn; const v = videolar[i]; kart = kartEl(i); onYuklendi = false;
     if (!v || !kart) return;
     kart.classList.add('yukleniyor'); durum(i, '');
     satirlar = []; bitti = false;
-    // oynatıcı hemen başlar (altyazı beklenmez); altyazı paralel gelir
-    await ytYukle();
-    if (benim !== sayac) return;
-    oyn = new YT.Player(kart.querySelector('.akis-yt'), {
-      videoId: v.id, host: 'https://www.youtube-nocookie.com',
-      playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1, cc_load_policy: 0, cc_lang_pref: 'en', hl: 'en', modestbranding: 1 },
-      events: {
-        onReady: () => { try { oyn.playVideo(); } catch { /* hazır değil */ } },
-        onStateChange: (ev) => {
-          if (benim !== sayac) return;
-          if (ev.data === 1) { kart.classList.remove('yukleniyor', 'durdu'); kart.classList.add('oynuyor'); clearInterval(izleyici); izleyici = setInterval(tik, 80); }
-          else if (ev.data === 0) { try { oyn.seekTo(0, true); oyn.playVideo(); } catch { /* bitti */ } }
-          else if (ev.data === 2) { kart.classList.add('durdu'); clearInterval(izleyici); tik(); }
-        },
-        onError: (ev) => { kart.classList.remove('yukleniyor'); durum(i, ev.data === 101 || ev.data === 150 ? 'Bu videonun sahibi başka yerlerde oynatılmasına izin vermiyor, sonrakine geçiliyor…' : 'Video oynatılamadı, sonrakine geçiliyor…'); setTimeout(() => { if (benim === sayac) kartEl(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 2000); },
-      },
-    });
+    const hedef = yed();
+    if (hedef.oyn && hedef.hazir && hedef.onHazir && hedef.id === v.id) {   // HIZLI YOL: sıradaki hazırdı, anında devral
+      akt().rol = 'bos'; akt().onHazir = false;
+      ai = 1 - ai; const p = akt(); p.rol = 'aktif'; oyn = p.oyn; katman = p.katman;
+      katmanKonumla(); gecis = true;
+      try { p.oyn.unMute(); p.sessiz = false; p.oyn.seekTo(0, true); p.oyn.playVideo(); } catch { /* yok */ }
+      setTimeout(() => { if (bn === sayac && p.oyn.getPlayerState?.() !== 1) baslat(v); }, 1200);   // devralma tutmadıysa (ör. iPhone) normal yükleme
+      sesDenetle(p, bn, v, i);
+    } else {
+      const p = akt(); p.rol = 'aktif'; oyn = p.oyn; katman = p.katman;
+      if (!p.oyn) { await kur(p, v.id, true); if (bn !== sayac) return; oyn = p.oyn; katman = p.katman; }
+      katmanKonumla();
+      if (!p.hazir) { if (p.id !== v.id) p.bekleyen = v; }   // hazır olunca doğru videoyla başlar
+      else if (p.id !== v.id) baslat(v);
+      else if (p.oyn.getPlayerState?.() === 1 && !gecis && !p.katman.classList.contains('gorunur')) { p.katman.classList.add('gorunur'); kart.classList.remove('yukleniyor', 'durdu'); kart.classList.add('oynuyor'); clearInterval(izleyici); izleyici = setInterval(tik, 80); if (!onYuklendi) { onYuklendi = true; onHazirla(i); } }   // kurulurken zaten başlamışsa
+    }
     let d;
     try { d = await altyaziAl(v.id); } catch (x) { d = { hata: x.message || 'Altyazı alınamadı.' }; }
-    if (benim !== sayac) return;
+    if (bn !== sayac) return;
     if (d.yok || d.hata || !(d.satirlar || []).length) {
       durum(i, d.hata ? d.hata : 'Bu videonun İngilizce altyazısı yok, sonrakine geçiliyor…');
-      setTimeout(() => { if (benim === sayac) kartEl(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, d.hata ? 4000 : 1400);
+      setTimeout(() => { if (bn === sayac) kartEl(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, d.hata ? 4000 : 800);
       return;
     }
-    satirlar = d.satirlar;
-    // sıradaki iki videonun altyazısını önceden al (geçişte beklenmesin)
-    for (const n of [i + 1, i + 2]) if (videolar[n] && !altyaziOnbellek.has(videolar[n].id)) altyaziAl(videolar[n].id).catch(() => {});
+    satirlar = kisalt(d.satirlar);
     // iPhone kendiliğinden başlatmazsa (kullanıcı dokunuşu gerekir) kapaktaki oynat işareti görünsün
-    setTimeout(() => { if (benim === sayac && oyn && oyn.getPlayerState?.() !== 1) { kart.classList.remove('yukleniyor'); kart.classList.add('durdu'); } }, 3500);
+    setTimeout(() => { if (bn === sayac && oyn && oyn.getPlayerState?.() !== 1) { kart.classList.remove('yukleniyor'); kart.classList.add('durdu'); } }, 3500);
   }
 
   async function basla() {
@@ -118,7 +222,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
       <article class="akis-kart" data-id="${v.id}">
         <div class="akis-sahne">
           <img class="akis-kapak" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="" loading="lazy">
-          <div class="akis-yt"></div>
+          <div class="akis-tap"></div>
           <button class="akis-oyna" aria-label="Oynat"><svg viewBox="0 0 24 24" width="44" height="44"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
           <div class="klip-bekle akis-bekle"><i></i></div>
           <p class="akis-durum" hidden></p>
@@ -134,6 +238,8 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
       for (const k of kayitlar) if (k.isIntersecting && k.intersectionRatio >= 0.7) etkinles([...liste.children].indexOf(k.target));
     }, { root: liste, threshold: [0.7] });
     [...liste.children].forEach((k) => gozlemci.observe(k));
+    addEventListener('resize', katmanKonumla);
+    akt().rol = 'aktif'; kur(akt(), videolar[0].id, true).then(() => { oyn = akt().oyn; katman = akt().katman; });   // iframe, ilk kaydırmadan önce yüklensin
   }
 
   // dokunuşlar: videoya dokun = oynat/durdur; kelimeye dokun = ilk anlam kartı
@@ -160,11 +266,24 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
     if (ev.target.closest('.akis-sozluk')) return;
     if (ev.target.closest('.akis-sahne') && i === aktif && oyn) {
       sozlukKapat();
+      if (oyn.isMuted?.()) { oyn.unMute(); durum(i, ''); return; }   // sessiz kaldıysa dokunuş sesi açar
       oyn.getPlayerState?.() === 1 ? oyn.pauseVideo() : oyn.playVideo();
     }
   });
   liste.addEventListener('scroll', () => { if (!liste.querySelector('.akis-sozluk:not([hidden])')) return; sozlukKapat(); }, { passive: true });
 
   basla();
-  return () => { sayac++; clearInterval(izleyici); gozlemci?.disconnect(); try { oyn?.destroy(); } catch { /* yok */ } };
+  return () => { sayac++; clearInterval(izleyici); gozlemci?.disconnect(); removeEventListener('resize', katmanKonumla); for (const p of P) try { p.oyn?.destroy(); } catch { /* yok */ } };
+}
+
+// Uygulama açılışında YouTube ve köprü sayfasını ısıt (ilk video açılışı beklemesin): görünmez bir oynatıcı kurar, birkaç sn sonra yok eder.
+export async function akisIsit() {
+  try {
+    await ytYukle();
+    const l = await (await fetch('/akis.json')).json(); const v = l[Math.floor(Math.random() * l.length)];
+    const h = document.createElement('div'); h.style.cssText = 'position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none';
+    document.body.append(h);
+    const p = new YT.Player(h, { videoId: v.id, host: 'https://www.youtube-nocookie.com', playerVars: { autoplay: 0, controls: 0, playsinline: 1, modestbranding: 1 } });
+    setTimeout(() => { try { p.destroy(); } catch { /* yok */ } h.remove(); }, 12000);
+  } catch { /* ısınma isteğe bağlı */ }
 }

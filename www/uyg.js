@@ -2,7 +2,7 @@
 // Ara ve kelime sayfaları girişsiz de açılır; liste, ekleme ve pratik giriş ister.
 import { bicimRegex, kacis } from './bicim.js';
 import { klipOynatici } from './klip.js';
-import { akisSayfasi } from './akis.js';
+import { akisSayfasi, akisIsit } from './akis.js';
 import { PAKET, sunucuAdresi, apiIstek, jetonYaz } from './ortam.js';
 import { videoSayfasi } from './video.js';
 let klipTemizle = () => {};
@@ -1160,3 +1160,4 @@ async function pratikRapor(id, yarida = false) {
 // PWA
 if (!PAKET && 'serviceWorker' in navigator && location.hostname !== 'localhost') navigator.serviceWorker.register('/sw.js').catch(() => {});
 yonlendir();
+if (PAKET) setTimeout(() => { if (!location.hash.startsWith('#/video')) akisIsit(); }, 3000);   // ilk video açılışı beklemesin
