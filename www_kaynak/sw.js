@@ -1,5 +1,5 @@
 // Voca service worker: arayüz kabuğu ve ses dosyaları önbellekte; API her zaman ağdan.
-const KABUK = 'voca-v47';
+const KABUK = 'voca-v48';
 const DOSYALAR = ['/', '/index.html', '/stil.css', '/uyg.js', '/klip.js', '/video.js', '/bicim.js', '/kolay.json', '/ikon.svg', '/manifest.webmanifest'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(KABUK).then((c) => c.addAll(DOSYALAR))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((k) => Promise.all(k.filter((x) => x !== KABUK && x !== 'voca-ses-2').map((x) => caches.delete(x))))); self.clients.claim(); });

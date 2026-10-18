@@ -8,10 +8,6 @@ import { yerelOku, yerelYaz } from './yerel.js';
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mutlak = (y) => (PAKET ? SITE + y : y);
-const AY_ANAHTAR = 'voca-altyazi-y';   // altyazının alttan uzaklığı (sahne yüksekliğinin oranı)
-const ayOku = () => { try { const v = parseFloat(localStorage.getItem(AY_ANAHTAR)); return Number.isFinite(v) ? Math.min(0.82, Math.max(0.03, v)) : 0.24; } catch { return 0.24; } };
-const ayYaz = (v) => { try { localStorage.setItem(AY_ANAHTAR, String(v)); } catch { /* depolama kapalı */ } };
-
 // ——— modül düzeyi: liste sırası ve indirilen videolar (uygulama açılışında ısınma + akış sayfası aynı depoyu kullanır) ———
 const DEPO = { sira: null, blob: new Map(), hata: new Map(), indiriliyor: new Set(), isci: false, hedefler: () => [] };
 function sirala(liste) {
@@ -29,7 +25,9 @@ async function indir(v, bitti) {
   if (DEPO.blob.has(v.id) || DEPO.indiriliyor.has(v.id) || (DEPO.hata.get(v.id) || 0) >= 2) return;
   DEPO.indiriliyor.add(v.id);
   try {
-    const r = await fetch(mutlak(v.mp4)); if (!r.ok) throw new Error('http ' + r.status);
+    let r = PAKET ? await fetch(v.mp4).catch(() => null) : null;   // uygulamada pilot videolar pakette gömülü (anında); yoksa sunucudan
+    if (!r || !r.ok || !/video/.test(r.headers.get('content-type') || '')) r = await fetch(mutlak(v.mp4));
+    if (!r.ok) throw new Error('http ' + r.status);
     const b = new Blob([await r.arrayBuffer()], { type: 'video/mp4' });
     DEPO.blob.set(v.id, URL.createObjectURL(b));
     DEPO.hata.delete(v.id);
@@ -51,6 +49,23 @@ export async function akisOnYukle() {
 }
 const KAYIT = (ad) => 'kayit:' + (ad || '');
 export async function kayitlariOku(ad) { const l = await yerelOku(KAYIT(ad)); return Array.isArray(l) ? l : []; }
+
+// Altyazı TEK ekran satırı: kelimeler ölçülen genişliğe göre parçalara bölünür (parça zamanı = ilk kelimesinin zamanı)
+function tekSatir(satirlar, genislik, font) {
+  const c = document.createElement('canvas').getContext('2d'); c.font = font;
+  const olc = (t) => c.measureText(t).width;
+  const sonuc = [];
+  for (const s of satirlar) {
+    let cur = [];
+    const kapat = (son) => { if (cur.length) sonuc.push({ bas: cur[0][1], son, k: cur }); cur = []; };
+    s.k.forEach((x, i) => {
+      if (cur.length && olc(cur.map((y) => y[0]).concat(x[0]).join(' ')) > genislik) kapat(Math.max(x[1], cur[0][1] + 0.3));
+      cur.push(x);
+    });
+    kapat(s.son);
+  }
+  return sonuc;
+}
 
 export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: ham, kullanici, baslangic }) {
   kap.innerHTML = `
@@ -77,7 +92,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     altyaziOnbellek.set(id, p); return p;
   };
 
-  const SAKLA_ONCE = 2, SAKLA_SONRA = 4;
+  const SAKLA_ONCE = 0, SAKLA_SONRA = 1;   // iPhone aynı anda az video çözücü verir: yalnız oynayan + sıradaki video kaynağı bağlı (diğerleri blob olarak bellekte)
   liste.innerHTML = videolar.map((v) => `
     <article class="kv-kart" data-id="${v.id}">
       <div class="kv-sahne">
@@ -87,13 +102,10 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
         <div class="kv-bekle"><i></i></div>
         <div class="kv-yan"><button class="kv-kaydet" type="button" aria-label="Kaydet" aria-pressed="false"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg><span>Kaydet</span></button></div>
         <div class="kv-altyazi"><p class="kv-satir" aria-live="off"></p></div>
-        <p class="kv-bilgi">${e(v.baslik)} · ${e(v.kanal)}</p>
         <div class="kv-sozluk" hidden></div>
         <p class="kv-durum" hidden></p>
-        <p class="kv-dbg" hidden></p>
       </div>
     </article>`).join('');
-  liste.style.setProperty('--ay', String(ayOku()));
 
   // ——— kaydedilenler ———
   (async () => { kayitli = new Set((await kayitlariOku(ad())).map((v) => v.id)); liste.querySelectorAll('.kv-kaydet').forEach((b) => { const id = b.closest('.kv-kart').dataset.id; b.classList.toggle('acik', kayitli.has(id)); b.setAttribute('aria-pressed', String(kayitli.has(id))); }); })();
@@ -124,13 +136,14 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     videolar.forEach((v, j) => {
       const el = vid(j); if (!el) return;
       if (j >= i - SAKLA_ONCE && j <= i + SAKLA_SONRA) return;
+      if (j >= i - 2 && j <= i + 4 && !el.dataset.kaynak) return;   // pencere içinde ama kaynağı yok: blob'a dokunma
       if (el.dataset.kaynak) { try { el.pause(); } catch { /* yok */ } el.removeAttribute('src'); el.load(); delete el.dataset.kaynak; delete el.dataset.hazir; delete el.dataset.basladi; }
-      const u = DEPO.blob.get(v.id); if (u && j !== 0 && j !== 1) { URL.revokeObjectURL(u); DEPO.blob.delete(v.id); }
+      const u = DEPO.blob.get(v.id); if (u && (j < i - 2 || j > i + 4) && j !== 0 && j !== 1) { URL.revokeObjectURL(u); DEPO.blob.delete(v.id); }
     });
   }
   function komsulariHazirla(i) {
     DEPO.hedefler = () => [videolar[i], videolar[i + 1], videolar[i + 2], videolar[i + 3], videolar[i - 1]];
-    for (let j = i - 1; j <= i + 3; j++) if (videolar[j] && DEPO.blob.has(videolar[j].id)) kaynakVer(j);
+    for (let j = i; j <= i + 1; j++) if (videolar[j] && DEPO.blob.has(videolar[j].id)) kaynakVer(j);
     sakla(i);
     isci((v) => { const j = idx(v.id); if (j >= 0 && j >= aktif - 1 && j <= aktif + 3) kaynakVer(j); });
     for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) altyaziAl(videolar[n].id);
@@ -151,8 +164,6 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   const tik = () => {
     const el = vid(aktif); if (!el) return;
     const t = el.currentTime;
-    const d = kart(aktif)?.querySelector('.kv-dbg');
-    if (PAKET && d) { d.hidden = false; d.textContent = `t ${t.toFixed(1)} · hazır ${el.readyState} · açılış ${gecisMs}ms · ses ${el.muted ? 'kapalı' : 'açık'}`; }
     let n = -1;
     for (let k = 0; k < satirlar.length && satirlar[k].bas <= t; k++) n = k;
     if (n >= 0 && t >= satirlar[n].son) n = -1;
@@ -164,21 +175,34 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   };
 
   // ——— etkinleştirme ———
-  function oynat(i) {   // etkin kartın videosu hazırsa sesli başlat (olmazsa sessiz)
+  function yenidenYukle(el) {   // takılmış video öğesi: kaynağı söküp yeniden bağla (bazen iOS çözücüsü ilk bağlamada takılıyor)
+    const u = el.currentSrc || el.src; if (!u) return;
+    try { el.pause(); el.removeAttribute('src'); el.load(); el.src = u; el.load(); } catch { /* yok */ }
+  }
+  function oynat(i) {   // etkin kartın videosu hazırsa sesli başlat (olmazsa sessiz); takılırsa kendini kurtarır
     const el = vid(i), k = kart(i), bn = sayac; if (!el || !k || el.dataset.basladi === String(bn)) return;
     el.dataset.basladi = String(bn);
     if (Math.abs(el.currentTime) > 0.2) { try { el.currentTime = 0; } catch { /* yok */ } }
-    el.muted = false;
-    el.play().then(() => { sesAcik = true; }).catch(() => {
-      el.muted = true;
-      el.play().then(() => { if (bn === sayac) durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); }).catch(() => {
-        // otomatik oynatma tamamen engelli (iPhone Düşük Güç Modu, veri tasarrufu…): spinner KALMAZ, oynat simgesi çıkar; sonraki kaydırma dokunuşunda hedef video dokunuşun içinde başlatılır
-        otoEngelli = true; if (bn !== sayac) return;
-        k.classList.remove('yukleniyor'); k.classList.add('durdu'); k.querySelector('.kv-oyna').hidden = false;
-        durum(i, 'Video otomatik başlamadı (Düşük Güç Modu olabilir). Başlatmak için dokun.');
+    const engelle = () => {   // gerçekten engelli (Düşük Güç Modu vb.): spinner KALMAZ, oynat simgesi çıkar
+      otoEngelli = true; if (bn !== sayac) return;
+      k.classList.remove('yukleniyor'); k.classList.add('durdu'); k.querySelector('.kv-oyna').hidden = false; durum(i, 'Başlatmak için dokun.');
+    };
+    const dene = (ikinci) => {
+      el.muted = false;
+      el.play().then(() => { sesAcik = true; }).catch(() => {
+        if (bn !== sayac) return; el.muted = true;
+        el.play().then(() => { if (bn === sayac) durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); }).catch(() => {
+          if (bn !== sayac) return;
+          if (!ikinci) { yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(true); }, 250); } else engelle();   // önce kaynağı yeniden bağlayıp bir kez daha dene (iOS çözücü takılması)
+        });
       });
-    });
-    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); k.classList.remove('yukleniyor', 'durdu'); k.classList.add('oynuyor'); };
+    };
+    dene(false);
+    setTimeout(() => {   // 2,5 sn içinde hâlâ oynamıyorsa (kullanıcı durdurmadıysa, simge yoksa): kaynağı yeniden bağla, bir kez daha
+      if (bn !== sayac || !el.paused || kullaniciDurdu || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
+      el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(true); }, 250);
+    }, 2500);
+    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); k.classList.remove('yukleniyor', 'durdu'); k.classList.add('oynuyor'); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
     if (!el.paused && el.readyState >= 3) oynadi(); else el.addEventListener('playing', oynadi);
   }
   function etkinles(i) {
@@ -191,17 +215,16 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     durum(i, ''); gecisT0 = performance.now();
     komsulariHazirla(i);
     if (el.dataset.kaynak) {   // indirilmiş: anında
-      el.dataset.hazir === '1' ? k.classList.remove('yukleniyor') : k.classList.add('yukleniyor');
       oynat(i);
     } else {
-      k.classList.add('yukleniyor');   // indirme bitince kaynakVer → oynat
+      setTimeout(() => { if (bn === sayac && !k.classList.contains('oynuyor') && !k.classList.contains('durdu')) k.classList.add('yukleniyor'); }, 600);   // spinner yalnız 0,6 sn'den uzun beklemede (kısa beklemede titreme yapmasın); indirme bitince kaynakVer → oynat
       setTimeout(() => {   // 7 sn'de inmediyse doğrudan adresten dene (yedek)
         if (bn !== sayac || el.dataset.kaynak) return;
         el.dataset.kaynak = '1'; el.preload = 'auto'; el.muted = true; el.src = mutlak(v.mp4); el.load(); oynat(i);
       }, 7000);
     }
     izleyici = setInterval(tik, 50);
-    altyaziAl(v.id).then((d) => { if (bn !== sayac) return; satirlar = (d && Array.isArray(d.satirlar)) ? kisalt(d.satirlar) : []; });
+    altyaziAl(v.id).then((d) => { if (bn !== sayac) return; const ls = getComputedStyle(kart(i).querySelector('.kv-satir')); satirlar = (d && Array.isArray(d.satirlar)) ? tekSatir(d.satirlar, Math.max(120, liste.clientWidth - 2 * 22), `${ls.fontWeight} ${ls.fontSize} ${ls.fontFamily}`) : []; });
     setTimeout(() => { if (bn === sayac && el.readyState < 3 && !el.error && el.dataset.kaynak) { durum(i, 'Video açılmadı, sonrakine geçiliyor…'); setTimeout(() => { if (bn === sayac) kart(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 1500); } }, 14000);
   }
 
@@ -229,9 +252,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const hedef = Math.abs(p - s0) > 0.04 ? (p > s0 ? Math.ceil(p - 0.001) : Math.floor(p + 0.001)) : aktif;
     const el = vid(hedef); if (el && el.dataset.kaynak && el.paused) { el.muted = false; el.play().catch(() => { el.muted = true; el.play().catch(() => {}); }); }
   }, { passive: true });
-  let surukleSonu = 0;   // altyazı sürüklemesinden hemen sonra gelen "click" yutulsun
   liste.addEventListener('click', (ev) => {
-    if (Date.now() - surukleSonu < 350) { ev.preventDefault(); ev.stopPropagation(); return; }
     sesiAc();
     const k = ev.target.closest('.kv-kart'); if (!k) return;
     const kb = ev.target.closest('.kv-kaydet');
@@ -259,30 +280,11 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     if (ev.target.closest('.kv-sahne') && i === aktif && el) {
       if (!k.querySelector('.kv-sozluk').hidden) { sozlukKapat(); if (!kullaniciDurdu) { el.play().catch(() => {}); return; } }
       const oy = k.querySelector('.kv-oyna');
-      if (el.paused) { kullaniciDurdu = false; oy.hidden = true; k.classList.remove('durdu'); el.play().catch(() => {}); }
+      if (el.paused) { kullaniciDurdu = false; oy.hidden = true; k.classList.remove('durdu'); durum(i, ''); if (el.readyState < 2 || el.error) yenidenYukle(el); el.muted = false; el.play().catch(() => { yenidenYukle(el); setTimeout(() => el.play().catch(() => { el.muted = true; el.play().catch(() => { k.classList.add('durdu'); oy.hidden = false; }); }), 200); }); }
       else { kullaniciDurdu = true; el.pause(); oy.hidden = false; k.classList.add('durdu'); }   // simge YALNIZ kullanıcı durdurunca; altyazı kelimeleri yine tıklanabilir (simge dokunuşu engellemez)
     }
   });
   liste.addEventListener('scroll', () => { if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); }, { passive: true });
-
-  // ——— altyazıyı aşağı-yukarı sürükleme ———
-  liste.addEventListener('pointerdown', (ev) => {
-    const ca = ev.target.closest('.kv-altyazi'); if (!ca) return;
-    const sahne = ca.closest('.kv-sahne'), h = sahne.getBoundingClientRect().height;
-    const y0 = ev.clientY, ay0 = ayOku(); let surukleniyor = false;
-    const tasi = (m) => {
-      const dy = y0 - m.clientY;
-      if (!surukleniyor && Math.abs(dy) < 8) return;
-      if (!surukleniyor) { surukleniyor = true; ca.classList.add('suruklenen'); try { ca.setPointerCapture(ev.pointerId); } catch { /* yok */ } }
-      m.preventDefault();
-      liste.style.setProperty('--ay', String(Math.min(0.82, Math.max(0.03, ay0 + dy / h))));
-    };
-    const bitir = () => {
-      ca.removeEventListener('pointermove', tasi); ca.removeEventListener('pointerup', bitir); ca.removeEventListener('pointercancel', bitir);
-      if (surukleniyor) { ca.classList.remove('suruklenen'); ayYaz(parseFloat(liste.style.getPropertyValue('--ay'))); surukleSonu = Date.now(); }
-    };
-    ca.addEventListener('pointermove', tasi); ca.addEventListener('pointerup', bitir); ca.addEventListener('pointercancel', bitir);
-  });
 
   return () => {
     sayac++; clearInterval(izleyici); gozlemci?.disconnect(); document.body.classList.remove('video-tam');
