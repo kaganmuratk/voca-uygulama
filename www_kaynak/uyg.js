@@ -4,7 +4,9 @@ import { bicimRegex, kacis } from './bicim.js';
 import { klipOynatici } from './klip.js';
 import { akisSayfasi, akisIsit } from './akis.js';
 import { kendiAkis } from './akis-kendi.js';
-import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz } from './ortam.js';
+import { yerelOku, yerelYaz } from './yerel.js';
+import { ayarOku as hatAyarOku, ayarYaz as hatAyarYaz, hatirlatmaUygula, hatirlatmaVar } from './hatirlatma.js';
+import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz, jsonAl } from './ortam.js';
 import { videoSayfasi } from './video.js';
 let klipTemizle = () => {};
 const $ = (s, k = document) => k.querySelector(s);
@@ -35,10 +37,13 @@ temaUygula();
 
 // ——— sunucu ———
 async function istek(yol, { method = 'GET', govde, sessiz } = {}) {
-  const { durum, veri: v } = await apiIstek(yol, { method, govde });
+  let sonuc;
+  try { sonuc = await apiIstek(yol, { method, govde }); }
+  catch (x) { const h = new Error('Bağlantı yok. İnternetini kontrol et.'); h.cevrimdisi = true; throw h; }   // uygulama çevrimdışıyken ham ağ hatası yerine anlaşılır mesaj
+  const { durum, veri: v } = sonuc;
   if (v.token) jetonYaz(v.token);            // uygulama: giriş/kayıt jetonu cihazda saklanır
-  if (yol === '/cikis') jetonYaz('');
-  if (durum === 401 && !sessiz && yol !== '/giris') { BEN = null; jetonYaz(''); girisGerekli(); throw new Error('giriş'); }
+  if (yol === '/cikis') { jetonYaz(''); yerelYaz('ben', null); if (BEN) yerelYaz('liste:' + (BEN.ad || ''), null); }
+  if (durum === 401 && !sessiz && yol !== '/giris') { BEN = null; jetonYaz(''); yerelYaz('ben', null); girisGerekli(); throw new Error('giriş'); }
   if (durum < 200 || durum >= 300) throw new Error(v.hata || 'Bir şeyler ters gitti.');
   return v;
 }
@@ -56,10 +61,31 @@ function girisGerekli() {
 }
 const yukleniyor = () => { uyg.innerHTML = '<div class="yukleniyor"><i></i></div>'; };
 
+// Kelime listem: sunucudan; çevrimdışıysa (uygulama) son kaydedilen kopya. Başarılı her okuma cihaza yazılır.
+async function listeAl() {
+  try { const g = await istek('/kelimeler'); yerelYaz('liste:' + (BEN?.ad || ''), g); return g; }
+  catch (x) { if (!x.cevrimdisi) throw x; const g = await yerelOku('liste:' + (BEN?.ad || '')); if (g) { listeCevrimdisi = true; return g; } throw x; }
+}
+let listeCevrimdisi = false;
+
 // ——— sözlük dizini (arama, filtre, öneri) ———
 let DIZIN = null;
 let SIK = [];
-const dizin = async () => DIZIN || ((async () => { const r = await istek('/sozluk'); SIK = r.sik || []; return (DIZIN = r.kelimeler); })());
+let DIZIN_SOZ = null;
+// Uygulamada sözlük cihazda hazır (pakete gömülü /sozluk.json, güncellemesi IndexedDB'de): açılış ağı beklemez, çevrimdışı da çalışır.
+// Sitede (sunucudan) eskisi gibi. Arkadan sunucudaki güncel sözlük alınıp bir sonraki açılış için saklanır.
+const dizin = () => DIZIN ? Promise.resolve(DIZIN) : (DIZIN_SOZ ||= (async () => {
+  if (PAKET) {
+    let r = await yerelOku('sozluk');
+    if (!r) { try { r = await (await fetch('/sozluk.json')).json(); } catch { r = null; } }
+    if (r && Array.isArray(r.kelimeler) && r.kelimeler.length) {
+      SIK = r.sik || []; DIZIN = r.kelimeler;
+      istek('/sozluk', { sessiz: true }).then((g) => { if (Array.isArray(g.kelimeler) && g.kelimeler.length > 1000) yerelYaz('sozluk', g); }).catch(() => {});
+      return DIZIN;
+    }
+  }
+  const r = await istek('/sozluk'); SIK = r.sik || []; return (DIZIN = r.kelimeler);
+})());
 const SOZLUK_HAS = (w) => DIZIN?.some((x) => x.k === w.toLowerCase());
 const SEVIYELER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const TURLER = ['isim', 'fiil', 'sıfat', 'zarf', 'phrasal verb', 'kalıp', 'deyim'];
@@ -75,7 +101,9 @@ function sesCal(kelime, bolge, dugme) {
     speechSynthesis.cancel(); speechSynthesis.speak(u);
     return;
   }
-  calan = new Audio(sunucuAdresi(`/ses/${encodeURIComponent(kelime.replace(/\s+/g, '-'))}-${bolge}.mp3`));
+  const sesYol = `/ses/${encodeURIComponent(kelime.replace(/\s+/g, '-'))}-${bolge}.mp3`;
+  calan = new Audio(sesYol);   // uygulamada pakette (yerel); sitede sunucudan
+  if (PAKET) { const k = calan; k.addEventListener('error', () => { if (calan === k) { calan = new Audio(SITE + sesYol); calan.onended = calan.onerror = () => dugme?.classList.remove('caliyor'); calan.play().catch(() => {}); } }, { once: true }); }
   dugme?.classList.add('caliyor');
   calan.onended = calan.onerror = () => dugme?.classList.remove('caliyor');
   calan.play().catch(() => dugme?.classList.remove('caliyor'));
@@ -113,7 +141,8 @@ async function yonlendir() {
   if (pratikDurum.aktif && !h.startsWith('#/pratik')) pratikDurum.aktif = false;
   klipTemizle(); klipTemizle = () => {};
   if (!BEN_BAKILDI) {
-    try { BEN = await istek('/ben', { sessiz: true }); } catch { BEN = null; }
+    try { BEN = await istek('/ben', { sessiz: true }); if (BEN) yerelYaz('ben', BEN); }
+    catch (x) { BEN = x.cevrimdisi ? await yerelOku('ben') : null; }   // çevrimdışı açılışta son bilinen hesap (liste önbellekten gelir)
     BEN_BAKILDI = true;
   }
   document.body.classList.toggle('misafir', !BEN);
@@ -204,6 +233,7 @@ async function hesap() {
       <div class="bolum-bas"><h2>Görünüm</h2></div>
       <div class="ayar-satir"><div class="ayar-ad"><b>Tema</b></div><select class="btn hayalet kucuk secim-dugme" id="tema" aria-label="Tema">${[['sistem', 'Sistem'], ['acik', 'Açık'], ['koyu', 'Koyu']].map(([k, ad]) => `<option value="${k}" ${k === tema ? 'selected' : ''}>${ad}</option>`).join('')}</select></div>
       <div class="ayar-satir"><div class="ayar-ad"><b>Tanıtım ekranları</b><span>İlk girişteki anlatımlar</span></div><button class="btn hayalet kucuk" id="rehber">Göster</button></div>
+      ${PAKET && hatirlatmaVar() ? `<div class="ayar-satir"><div class="ayar-ad"><b>Günlük hatırlatma</b><span>Her gün bu saatte bildirim</span></div><input type="time" class="btn hayalet kucuk" id="hatSaat" value="${String(hatAyarOku().saat).padStart(2, '0')}:${String(hatAyarOku().dakika).padStart(2, '0')}" aria-label="Hatırlatma saati"><button class="btn ${hatAyarOku().acik ? '' : 'hayalet'} kucuk" id="hatAc">${hatAyarOku().acik ? 'Açık' : 'Kapalı'}</button></div>` : ''}
     </section>
 
     <section class="ayar-grup">
@@ -243,6 +273,11 @@ async function hesap() {
     </section>
   </div>`;
   $('#tema').onchange = (ev) => { try { localStorage.setItem('voca-tema', ev.target.value); } catch {} temaUygula(ev.target.value); };
+  if ($('#hatAc')) {
+    const uygula = async (ayar) => { const r = await hatirlatmaUygula(ayar).catch((x) => ({ tamam: false, mesaj: x.message })); bildir(r.mesaj); if (!r.tamam) { ayar.acik = false; } hatAyarYaz(ayar); $('#hatAc').textContent = ayar.acik ? 'Açık' : 'Kapalı'; $('#hatAc').classList.toggle('hayalet', !ayar.acik); };
+    $('#hatAc').onclick = () => uygula({ ...hatAyarOku(), acik: !hatAyarOku().acik });
+    $('#hatSaat').onchange = (ev) => { const [s, d] = ev.target.value.split(':').map(Number); if (Number.isFinite(s)) uygula({ ...hatAyarOku(), saat: s, dakika: d || 0, acik: hatAyarOku().acik }); };
+  }
   $('#rehber').onclick = () => {
     try { localStorage.removeItem('voca-hosgeldin-' + BEN.ad); localStorage.removeItem('voca-pratik-nasil'); } catch {}
     bildir('Tanıtım ekranları yeniden gösterilecek.'); hosgeldin();
@@ -316,7 +351,7 @@ function satir(k) {
 const ARA_SIMGE = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>';
 async function sozlukListesi(kap, { odak = false, baslangic = '' } = {}) {
   const d = await dizin();
-  const benim = BEN ? new Map((await istek('/kelimeler')).kelimeler.map((k) => [k.kelime, k])) : new Map();
+  const benim = BEN ? new Map((await listeAl()).kelimeler.map((k) => [k.kelime, k])) : new Map();
   const f = { q: baslangic, s: '', t: '', d: '' };
   kap.innerHTML = `
     <div class="arama">
@@ -396,7 +431,7 @@ async function ara({ ekle: topluAcik = false } = {}) {
 
 // toplu ekleme: yapıştır → onay → ekle
 async function topluEkle(kap, hazir = '') {
-  const l = BEN ? await istek('/kelimeler') : { kelimeler: [] };
+  const l = BEN ? await listeAl() : { kelimeler: [] };
   const etiketler = tumEtiketler(l.kelimeler), etSecili = new Set();
   kap.innerHTML = `
   <div class="ekle-izgara">
@@ -613,7 +648,11 @@ async function akisAc() {
   const ortak = { dizin: DIZIN, istek, bildir, girisGerekli, girisli: () => !!BEN, ekle: async (w) => { await istek('/kelimeler', { method: 'POST', govde: { kelimeler: [w] } }); bildir('Listene eklendi.'); } };
   // Kendi sunucumuzdaki videolar varsa onlar (anında geçiş); yoksa ya da #/video/yt ise YouTube akışı
   let kendi = [];
-  if (!location.hash.startsWith('#/video/yt')) { try { const r = await fetch((PAKET ? SITE : '') + '/akis-kendi.json', { cache: 'no-cache' }); if (r.ok) kendi = await r.json(); } catch { /* ağ yok: YouTube akışı */ } }
+  if (!location.hash.startsWith('#/video/yt')) {
+    kendi = (await jsonAl('/akis-kendi.json')) || [];
+    if (!kendi.length && PAKET) { try { kendi = await (await fetch('/akis-kendi.json')).json(); } catch { /* pakette de yok */ } }   // ağ yoksa pakette gelen son liste
+    if (!Array.isArray(kendi)) kendi = [];
+  }
   klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, videolar: kendi }) : akisSayfasi(uyg.firstElementChild, ortak);
 }
 async function videoAc() {
@@ -633,7 +672,9 @@ async function liste() {
     return;
   }
   yukleniyor();
-  const [l, d] = await Promise.all([istek('/kelimeler'), dizin()]);
+  listeCevrimdisi = false;
+  const [l, d] = await Promise.all([listeAl(), dizin()]);
+  if (listeCevrimdisi) setTimeout(() => bildir('Çevrimdışısın: son kaydedilen liste gösteriliyor.'), 400);
   const bilgi = new Map(d.map((x) => [x.k, x]));
   const etiketler = tumEtiketler(l.kelimeler);
   const say = (f) => l.kelimeler.filter(f).length;
@@ -1163,4 +1204,4 @@ async function pratikRapor(id, yarida = false) {
 // PWA
 if (!PAKET && 'serviceWorker' in navigator && location.hostname !== 'localhost') navigator.serviceWorker.register('/sw.js').catch(() => {});
 yonlendir();
-if (PAKET) setTimeout(() => { if (!location.hash.startsWith('#/video')) akisIsit(); }, 3000);   // ilk video açılışı beklemesin
+if (PAKET) setTimeout(() => { if (hatAyarOku().acik) hatirlatmaUygula().catch(() => {}); }, 4000);   // 14 günlük pencereyi her açılışta yenile   // ilk video açılışı beklemesin

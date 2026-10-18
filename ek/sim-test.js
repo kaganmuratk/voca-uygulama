@@ -19,7 +19,7 @@ const snap = (etiket) => {
   await bekle(5000);
   location.hash = '#/video';
   for (let k = 0; k < 100 && !document.querySelector('.kv-kart'); k++) await bekle(200);
-  const liste = document.querySelector('.kv-liste'); if (!liste) { gonder({ olay: 'hata', mesaj: 'kv-liste yok' }); return; }
+  const liste = document.querySelector('.kv-liste'); if (!liste) { gonder({ olay: 'hata', mesaj: 'kv-liste yok', govde: document.body.innerText.slice(0, 200) }); gonder({ olay: 'bitti' }); return; }
   const dur = setInterval(() => gonder(snap('ara')), 200);
   await bekle(9000);
   gonder({ olay: 'isaret', etiket: 'ilk-video-bitti' });

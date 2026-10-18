@@ -27,3 +27,14 @@ export async function apiIstek(yol, { method = 'GET', govde } = {}) {
   const veri = typeof r.data === 'string' ? (() => { try { return JSON.parse(r.data); } catch { return {}; } })() : (r.data || {});
   return { durum: r.status, veri };
 }
+
+// Sunucudaki herkese açık JSON dosyası (akış listesi, altyazı vb.): uygulamada Capacitor yerel HTTP (CORS yok), sitede fetch. Başarısızsa null.
+export async function jsonAl(yol) {
+  try {
+    if (!PAKET) { const r = await fetch(yol, { cache: 'no-cache' }); return r.ok ? await r.json() : null; }
+    const H = window.Capacitor?.Plugins?.CapacitorHttp; if (!H) return null;
+    const r = await H.get({ url: SITE + yol, headers: { 'X-Voca-App': '1' }, responseType: 'json' });
+    if (r.status < 200 || r.status >= 300) return null;
+    return typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+  } catch { return null; }
+}
