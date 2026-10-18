@@ -27,6 +27,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
     </div>`;
   const liste = kap.querySelector('.akis-liste');
   let videolar = [], aktif = -1, oyn = null, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, bitti = false;
+  const HATA_AYIKLA = PAKET; // deney sürümünde küçük tanı satırı (t, durum, satır, mesaj sayısı); kararlı olunca kapatılır
   const altyaziOnbellek = new Map();
 
   const altyaziAl = async (id) => {
@@ -52,6 +53,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   const tik = () => {
     if (!oyn) return;
     const t = oyn.getCurrentTime();
+    if (HATA_AYIKLA) { const d = kartEl(aktif)?.querySelector('.akis-dbg'); if (d) { d.hidden = false; d.textContent = `t ${t.toFixed(1)} · durum ${oyn.getPlayerState?.()} · satır ${sira + 1}/${satirlar.length} · mesaj ${oyn.mesaj ?? '-'}`; } }
     let n = -1;
     for (let k = 0; k < satirlar.length && satirlar[k].bas <= t; k++) n = k;
     if (n >= 0 && t >= satirlar[n].son) n = -1;
@@ -77,19 +79,10 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
     aktif = i; const benim = ++sayac; const v = videolar[i]; const kart = kartEl(i);
     if (!v || !kart) return;
     kart.classList.add('yukleniyor'); durum(i, '');
-    let d;
-    try { d = await altyaziAl(v.id); } catch (x) { d = { hata: x.message || 'Altyazı alınamadı.' }; }
-    if (benim !== sayac) return;
-    if (d.yok || d.hata || !(d.satirlar || []).length) {
-      kart.classList.remove('yukleniyor');
-      durum(i, d.hata ? d.hata : 'Bu videonun İngilizce altyazısı yok, sonrakine geçiliyor…');
-      setTimeout(() => { if (benim === sayac) kartEl(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, d.hata ? 4000 : 1400);
-      return;
-    }
-    satirlar = d.satirlar;
+    satirlar = []; bitti = false;
+    // oynatıcı hemen başlar (altyazı beklenmez); altyazı paralel gelir
     await ytYukle();
     if (benim !== sayac) return;
-    bitti = false;
     oyn = new YT.Player(kart.querySelector('.akis-yt'), {
       videoId: v.id, host: 'https://www.youtube-nocookie.com',
       playerVars: { autoplay: 1, controls: 0, disablekb: 1, fs: 0, iv_load_policy: 3, rel: 0, playsinline: 1, cc_load_policy: 0, cc_lang_pref: 'en', hl: 'en', modestbranding: 1 },
@@ -104,6 +97,17 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
         onError: (ev) => { kart.classList.remove('yukleniyor'); durum(i, ev.data === 101 || ev.data === 150 ? 'Bu videonun sahibi başka yerlerde oynatılmasına izin vermiyor, sonrakine geçiliyor…' : 'Video oynatılamadı, sonrakine geçiliyor…'); setTimeout(() => { if (benim === sayac) kartEl(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 2000); },
       },
     });
+    let d;
+    try { d = await altyaziAl(v.id); } catch (x) { d = { hata: x.message || 'Altyazı alınamadı.' }; }
+    if (benim !== sayac) return;
+    if (d.yok || d.hata || !(d.satirlar || []).length) {
+      durum(i, d.hata ? d.hata : 'Bu videonun İngilizce altyazısı yok, sonrakine geçiliyor…');
+      setTimeout(() => { if (benim === sayac) kartEl(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, d.hata ? 4000 : 1400);
+      return;
+    }
+    satirlar = d.satirlar;
+    // sıradaki iki videonun altyazısını önceden al (geçişte beklenmesin)
+    for (const n of [i + 1, i + 2]) if (videolar[n] && !altyaziOnbellek.has(videolar[n].id)) altyaziAl(videolar[n].id).catch(() => {});
     // iPhone kendiliğinden başlatmazsa (kullanıcı dokunuşu gerekir) kapaktaki oynat işareti görünsün
     setTimeout(() => { if (benim === sayac && oyn && oyn.getPlayerState?.() !== 1) { kart.classList.remove('yukleniyor'); kart.classList.add('durdu'); } }, 3500);
   }
@@ -122,6 +126,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
         <div class="akis-alt">
           <p class="akis-satir klip-en" aria-live="off"></p>
           <p class="akis-bilgi">${e(v.baslik)} · ${e(v.kanal)}</p>
+          <p class="akis-dbg" hidden></p>
           <div class="akis-sozluk klip-sozluk" hidden></div>
         </div>
       </article>`).join('');

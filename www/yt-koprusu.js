@@ -6,7 +6,7 @@ import { SITE } from './ortam.js';
 let sayac = 0;
 export class KopruOyuncu {
   constructor(hedef, secenek = {}) {
-    this.k = { t: 0, durum: -1, sure: 0, hiz: 1 };
+    this.k = { t: 0, durum: -1, sure: 0, hiz: 1 }; this.zT = 0; this.mesaj = 0;
     this.sessiz = false; this.ses = 100; this.olay = secenek.events || {};
     this.hazirMi = false; this.kimlik = 'k' + (++sayac);
     const pv = secenek.playerVars || {};
@@ -27,7 +27,7 @@ export class KopruOyuncu {
       else if (m.tur === 'hata') this.olay.onError?.({ data: m.kod });
       else if (m.tur === 'zaman') {
         const onceki = this.k.durum;
-        this.k = { t: m.t, durum: m.durum, sure: m.sure, hiz: m.hiz };
+        this.k = { t: m.t, durum: m.durum, sure: m.sure, hiz: m.hiz }; this.zT = performance.now(); this.mesaj++;
         if (m.durum !== onceki) this.olay.onStateChange?.({ data: m.durum, target: this });
       }
     };
@@ -37,7 +37,8 @@ export class KopruOyuncu {
   playVideo() { this.gonder({ komut: 'oynat' }); }
   pauseVideo() { this.gonder({ komut: 'durdur' }); }
   seekTo(t) { this.k.t = t; this.gonder({ komut: 'git', t }); }
-  getCurrentTime() { return this.k.t; }
+  // Köprüden gelen zaman seyrekleşirse (iOS arka plan iframe zamanlayıcıları kısılabilir) oynarken yerel saatle ileri say
+  getCurrentTime() { const g = this.k.durum === 1 && this.zT ? (performance.now() - this.zT) / 1000 : 0; return this.k.t + Math.min(g, 3) * (this.k.hiz || 1); }
   getDuration() { return this.k.sure; }
   getPlayerState() { return this.k.durum; }
   getPlaybackRate() { return this.k.hiz; }
