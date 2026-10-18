@@ -91,10 +91,11 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   // Kaydırınca hazır olan oynatıcı hemen devralır (anında başlar); hazır değilse etkin oynatıcıya loadVideoById (iframe yeniden kurulmaz).
   // Oynatıcılar listenin içinde kayan üst katmandır; oynamaya başlayana kadar gizli, altta kapak görünür (beyaz ekran olmaz).
   const yeniP = () => ({ oyn: null, katman: null, hazir: false, id: '', rol: 'bos', onHazir: false, sessiz: false, bekleyen: null });
-  const P = [yeniP(), yeniP()]; let ai = 0, kart = null, benim = 0, gecis = false, onYuklendi = false, katman = null, gecisT0 = 0, gecisYol = '-', gecisMs = 0, hizliHata = 0;
+  const P = [yeniP(), yeniP()]; window.__akisP = P; let konumZaman = 0, ai = 0, kart = null, benim = 0, gecis = false, onYuklendi = false, katman = null, gecisT0 = 0, gecisYol = '-', gecisMs = 0, hizliHata = (() => { try { return localStorage.getItem('voca-tek') === '1' ? 99 : 0; } catch { return 0; } })();   // voca-tek=1: tek oynatıcı kipi (deney/yedek)
   const akt = () => P[ai], yed = () => P[1 - ai];
   const katmanKonumla = () => {
     const k = kartEl(aktif)?.querySelector('.akis-sahne') || liste.querySelector('.akis-sahne'); if (!k) return;
+    if (!k.offsetWidth || !k.offsetHeight) return;
     for (const p of P) if (p.katman) Object.assign(p.katman.style, { top: '0', left: '0', transform: `translate(${k.offsetLeft}px, ${k.offsetTop}px)`, width: k.offsetWidth + 'px', height: k.offsetHeight + 'px' });   // ikisi de tam boyutlu, aynı yerde (yedek opacity 0)
   };
   const baslat = (v) => {   // aktif oynatıcıda video başlat (sıfırdan yükle)
@@ -157,7 +158,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
 
   function birak() {
     clearInterval(izleyici); izleyici = null;
-    const p = akt(); try { p.oyn?.pauseVideo(); } catch { /* yok */ }
+    const p = akt(); try { p.oyn?.mute(); p.sessiz = !!p.oyn; p.oyn?.pauseVideo(); } catch { /* yok */ }   // eski videonun sesi anında kesilsin (duraklatma mesajı gecikebiliyor)
     p.katman?.classList.remove('gorunur');
     satirlar = []; sira = -1;
     const eski = kartEl(aktif);
@@ -193,7 +194,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
       akt().rol = 'bos'; akt().onHazir = false;
       ai = 1 - ai; const p = akt(); p.rol = 'aktif'; oyn = p.oyn; katman = p.katman;
       katmanKonumla(); gecis = true;
-      try { p.oyn.unMute(); p.sessiz = false; p.oyn.seekTo(0, true); p.oyn.playVideo(); } catch { /* yok */ }
+      try { p.oyn.unMute(); p.sessiz = false; p.oyn.playVideo(); } catch { /* yok */ }   // zaten 0. sn'de hazır bekliyor: seekTo yeniden arabelleğe aldırıp sesi/görüntüyü takıyordu
       setTimeout(() => { if (bn === sayac && p.oyn.getPlayerState?.() !== 1) { hizliHata++; baslat(v); } }, 800);   // devralma tutmadıysa (ör. iPhone) normal yükleme; iki kez tutmazsa hızlı yol kapanır
       sesDenetle(p, bn, v, i);
     } else {
@@ -246,6 +247,8 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
     }, { root: liste, threshold: [0.7] });
     [...liste.children].forEach((k) => gozlemci.observe(k));
     addEventListener('resize', katmanKonumla);
+    konumZaman = setInterval(katmanKonumla, 250);   // iOS'ta yerleşim geç oturabiliyor (sahne bir an 0 genişlikte kalıyordu): katman her zaman sahneyle hizalı kalsın
+    try { new ResizeObserver(katmanKonumla).observe(liste); } catch { /* eski WebView */ }
     akt().rol = 'aktif'; kur(akt(), videolar[0].id, true).then(() => { oyn = akt().oyn; katman = akt().katman; });   // iframe, ilk kaydırmadan önce yüklensin
   }
 
@@ -280,7 +283,7 @@ export function akisSayfasi(kap, { dizin, istek, ekle, girisli, girisGerekli, bi
   liste.addEventListener('scroll', () => { if (!liste.querySelector('.akis-sozluk:not([hidden])')) return; sozlukKapat(); }, { passive: true });
 
   basla();
-  return () => { sayac++; clearInterval(izleyici); gozlemci?.disconnect(); removeEventListener('resize', katmanKonumla); for (const p of P) try { p.oyn?.destroy(); } catch { /* yok */ } };
+  return () => { sayac++; clearInterval(izleyici); gozlemci?.disconnect(); removeEventListener('resize', katmanKonumla); clearInterval(konumZaman); for (const p of P) try { p.oyn?.destroy(); } catch { /* yok */ } };
 }
 
 // Uygulama açılışında YouTube ve köprü sayfasını ısıt (ilk video açılışı beklemesin): görünmez bir oynatıcı kurar, birkaç sn sonra yok eder.
