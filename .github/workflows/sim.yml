@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: npm ci
-      - name: Sim www'yi hazırla (kaynak: kelime/public kopyası www_kaynak)
+      - name: Sim www hazirla
         run: |
           sh scripts/hazirla.sh www_kaynak
       - run: npx cap sync ios
