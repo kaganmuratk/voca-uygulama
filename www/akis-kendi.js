@@ -80,7 +80,7 @@ function tekSatir(satirlar, genislik, olc) {
   return sonuc;
 }
 
-export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: ham, kullanici, baslangic }) {
+export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: ham, kullanici, baslangic, listeKelimeleri }) {
   kap.innerHTML = `
     <div class="kv">
       <a class="kv-link" href="#/video/link">Bağlantıyla aç</a>
@@ -122,6 +122,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
         </div>
         <div class="kv-hizrozet" hidden>2x ▸▸</div>
         <div class="kv-kelpanel" hidden></div>
+        <div class="kv-ipucu" hidden></div>
         <div class="kv-altyazi"><p class="kv-satir" aria-live="off"></p><span class="kv-satir kv-olc" aria-hidden="true"></span></div>
         <div class="kv-sozluk" hidden></div>
         <p class="kv-durum" hidden></p>
@@ -254,6 +255,18 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor'); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
     if (!el.paused && el.readyState >= 3) oynadi(); else el.addEventListener('playing', oynadi);
   }
+  // Listendeki bir kelime bu videoda geçiyorsa kısa, abartısız ipucu (Kağan 2026-10-19): "evidence kelimen bu videoda geçiyor"
+  let listeSet = null; const listeP = Promise.resolve(listeKelimeleri ? listeKelimeleri() : null).then((x) => { listeSet = x; return x; }).catch(() => null);
+  async function ipucuGoster(i, v, bn) {
+    const set = listeSet || await listeP; if (!set || !set.size || bn !== sayac) return;
+    const d = await altyaziAl(v.id); if (bn !== sayac || !d || !Array.isArray(d.satirlar)) return;
+    const bulunan = [];
+    for (const s of d.satirlar) for (const x of s.k) { const kk = kokBul(x[0], dizin); const ad = kk && kk.k; if (ad && set.has(ad) && !bulunan.includes(ad)) bulunan.push(ad); }
+    const el = kart(i)?.querySelector('.kv-ipucu'); if (!bulunan.length || !el) return;
+    el.textContent = bulunan.length === 1 ? `“${bulunan[0]}” kelimen bu videoda geçiyor` : `“${bulunan.slice(0, 2).join('”, “')}”${bulunan.length > 2 ? ` +${bulunan.length - 2}` : ''} kelimelerin bu videoda geçiyor`;
+    el.hidden = false; el.classList.remove('gor'); void el.offsetWidth; el.classList.add('gor');
+    setTimeout(() => { if (bn === sayac) { el.classList.remove('gor'); setTimeout(() => { el.hidden = true; }, 400); } }, 4000);
+  }
   function etkinles(i) {
     if (i === aktif) return;
     const onceki = aktif;
@@ -273,6 +286,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       }, 7000);
     }
     izleyici = setInterval(tik, 50);
+    ipucuGoster(i, v, bn);
     altyaziAl(v.id).then((d) => { if (bn !== sayac) return; const olcEl = kart(i).querySelector('.kv-olc'); const olc = (t) => { olcEl.textContent = t; return olcEl.getBoundingClientRect().width; }; satirlar = (d && Array.isArray(d.satirlar)) ? tekSatir(d.satirlar, Math.round(liste.clientWidth * 0.66), olc) : []; });
     setTimeout(() => { if (bn === sayac && el.readyState < 3 && !el.error && el.dataset.kaynak) { durum(i, 'Video açılmadı, sonrakine geçiliyor…'); setTimeout(() => { if (bn === sayac) kart(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 1500); } }, 14000);
   }

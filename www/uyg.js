@@ -672,7 +672,7 @@ async function akisAc(baslangic) {
     if (!kendi.length && PAKET) { try { kendi = await (await fetch('/akis-kendi.json')).json(); } catch { /* pakette de yok */ } }   // ağ yoksa pakette gelen son liste
     if (!Array.isArray(kendi)) kendi = [];
   }
-  klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, videolar: kendi, kullanici: () => BEN?.ad || '', baslangic: typeof baslangic === 'string' ? baslangic : '' }) : akisSayfasi(uyg.firstElementChild, ortak);
+  klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, listeKelimeleri: async () => { if (!BEN) return null; try { return new Set((await listeAl()).kelimeler.map((k) => String(k.kelime).toLowerCase())); } catch { return null; } }, videolar: kendi, kullanici: () => BEN?.ad || '', baslangic: typeof baslangic === 'string' ? baslangic : '' }) : akisSayfasi(uyg.firstElementChild, ortak);
 }
 async function videoAc() {
   await dizin();
