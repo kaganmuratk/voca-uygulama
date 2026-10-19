@@ -5,6 +5,7 @@ import { klipOynatici } from './klip.js';
 import { akisSayfasi, akisIsit } from './akis.js';
 import { kendiAkis, akisOnYukle, kayitlariOku } from './akis-kendi.js';
 import { yerelOku, yerelYaz } from './yerel.js';
+import { depoBoyutu, depoyuBosalt } from './video-depo.js';
 import { ayarOku as hatAyarOku, ayarYaz as hatAyarYaz, hatirlatmaUygula, hatirlatmaVar } from './hatirlatma.js';
 import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz, jsonAl } from './ortam.js';
 import { videoSayfasi } from './video.js';
@@ -236,6 +237,7 @@ async function hesap() {
       <div class="bolum-bas"><h2>Görünüm</h2></div>
       <div class="ayar-satir"><div class="ayar-ad"><b>Tema</b></div><select class="btn hayalet kucuk secim-dugme" id="tema" aria-label="Tema">${[['sistem', 'Sistem'], ['acik', 'Açık'], ['koyu', 'Koyu']].map(([k, ad]) => `<option value="${k}" ${k === tema ? 'selected' : ''}>${ad}</option>`).join('')}</select></div>
       <div class="ayar-satir"><div class="ayar-ad"><b>Tanıtım ekranları</b><span>İlk girişteki anlatımlar</span></div><button class="btn hayalet kucuk" id="rehber">Göster</button></div>
+      <div class="ayar-satir"><div class="ayar-ad"><b>Video önbelleği</b><span id="depoBilgi">Hesaplanıyor…</span></div><button class="btn hayalet kucuk" id="depoTemizle">Temizle</button></div>
       ${PAKET && hatirlatmaVar() ? `<div class="ayar-satir"><div class="ayar-ad"><b>Günlük hatırlatma</b><span>Her gün bu saatte bildirim</span></div><input type="time" class="btn hayalet kucuk" id="hatSaat" value="${String(hatAyarOku().saat).padStart(2, '0')}:${String(hatAyarOku().dakika).padStart(2, '0')}" aria-label="Hatırlatma saati"><button class="btn ${hatAyarOku().acik ? '' : 'hayalet'} kucuk" id="hatAc">${hatAyarOku().acik ? 'Açık' : 'Kapalı'}</button></div>` : ''}
     </section>
 
@@ -292,6 +294,9 @@ async function hesap() {
     $('#hatAc').onclick = () => uygula({ ...hatAyarOku(), acik: !hatAyarOku().acik });
     $('#hatSaat').onchange = (ev) => { const [s, d] = ev.target.value.split(':').map(Number); if (Number.isFinite(s)) uygula({ ...hatAyarOku(), saat: s, dakika: d || 0, acik: hatAyarOku().acik }); };
   }
+  const depoYaz = async () => { const n = await depoBoyutu(); const el = $('#depoBilgi'); if (el) el.textContent = n ? `${(n / 1048576).toFixed(0)} MB (en fazla 150 MB)` : 'Boş'; };
+  depoYaz();
+  $('#depoTemizle').onclick = async () => { await depoyuBosalt(); bildir('Video önbelleği temizlendi.'); depoYaz(); };
   $('#rehber').onclick = () => {
     try { localStorage.removeItem('voca-hosgeldin-' + BEN.ad); localStorage.removeItem('voca-pratik-nasil'); } catch {}
     bildir('Tanıtım ekranları yeniden gösterilecek.'); hosgeldin();

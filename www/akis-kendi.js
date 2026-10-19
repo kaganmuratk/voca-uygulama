@@ -5,6 +5,7 @@ import { kokBul, ogrenmeyeDeger } from './klip.js';
 import { SITE, PAKET, jsonAl } from './ortam.js';
 import { kisalt } from './akis.js';
 import { yerelOku, yerelYaz } from './yerel.js';
+import { depodanOku, depoyaYaz } from './video-depo.js';
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mutlak = (y) => (PAKET ? SITE + y : y);
@@ -31,11 +32,19 @@ async function indir(v, bitti) {
   if (DEPO.blob.has(v.id) || DEPO.indiriliyor.has(v.id) || (DEPO.hata.get(v.id) || 0) >= 2) return;
   DEPO.indiriliyor.add(v.id);
   try {
-    let r = PAKET ? await fetch(v.mp4).catch(() => null) : null;   // uygulamada pilot videolar pakette gömülü (anında); yoksa sunucudan
-    if (!r || !r.ok || !/video/.test(r.headers.get('content-type') || '')) r = await fetch(mutlak(v.mp4));
-    if (!r.ok) throw new Error('http ' + r.status);
-    const b = new Blob([await r.arrayBuffer()], { type: 'video/mp4' });
-    DEPO.blob.set(v.id, URL.createObjectURL(b));
+    let buf = null;
+    let r = PAKET ? await fetch(v.mp4).catch(() => null) : null;   // uygulamada pilot videolar pakette gömülü (anında); yoksa kalıcı önbellek, o da yoksa sunucu
+    if (r && r.ok && /video/.test(r.headers.get('content-type') || '')) buf = await r.arrayBuffer();
+    else {
+      buf = await depodanOku(v.id);
+      if (!buf) {
+        r = await fetch(mutlak(v.mp4));
+        if (!r.ok) throw new Error('http ' + r.status);
+        buf = await r.arrayBuffer();
+        depoyaYaz(v.id, buf);   // arka planda kalıcı sakla (beklenmez)
+      }
+    }
+    DEPO.blob.set(v.id, URL.createObjectURL(new Blob([buf], { type: 'video/mp4' })));
     DEPO.hata.delete(v.id);
   } catch { DEPO.hata.set(v.id, (DEPO.hata.get(v.id) || 0) + 1); }
   finally { DEPO.indiriliyor.delete(v.id); bitti?.(v); }
