@@ -3,7 +3,7 @@
 import { bicimRegex, kacis } from './bicim.js';
 import { klipOynatici } from './klip.js';
 import { akisSayfasi, akisIsit } from './akis.js';
-import { kendiAkis, akisOnYukle, kayitlariOku } from './akis-kendi.js';
+import { kendiAkis, akisOnYukle, kayitlariOku, akisSirayiHazirla } from './akis-kendi.js';
 import { yerelOku, yerelYaz } from './yerel.js';
 import { depoBoyutu, depoyuBosalt } from './video-depo.js';
 import { ayarOku as hatAyarOku, ayarYaz as hatAyarYaz, hatirlatmaUygula, hatirlatmaVar } from './hatirlatma.js';
@@ -672,6 +672,7 @@ async function akisAc(baslangic) {
     if (!kendi.length && PAKET) { try { kendi = await (await fetch('/akis-kendi.json')).json(); } catch { /* pakette de yok */ } }   // ağ yoksa pakette gelen son liste
     if (!Array.isArray(kendi)) kendi = [];
   }
+  if (kendi.length) await akisSirayiHazirla(kendi);
   klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, listeKelimeleri: async () => { if (!BEN) return null; try { return new Set((await listeAl()).kelimeler.map((k) => String(k.kelime).toLowerCase())); } catch { return null; } }, videolar: kendi, kullanici: () => BEN?.ad || '', baslangic: typeof baslangic === 'string' ? baslangic : '' }) : akisSayfasi(uyg.firstElementChild, ortak);
 }
 async function videoAc() {

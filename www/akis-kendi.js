@@ -6,6 +6,7 @@ import { SITE, PAKET, jsonAl } from './ortam.js';
 import { kisalt } from './akis.js';
 import { yerelOku, yerelYaz } from './yerel.js';
 import { depodanOku, depoyaYaz } from './video-depo.js';
+import * as KS from './akis-kisisel.js';
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mutlak = (y) => (PAKET ? SITE + y : y);
@@ -57,11 +58,12 @@ async function isci(bitti) {   // tek işçi: o an gereken en öncelikli videoyu
 // Uygulama açılışında çağrılır: liste alınır, sıra belirlenir, ilk 2 video indirilmeye başlar (Video sekmesi açılınca hazır olsun).
 export async function akisOnYukle() {
   try {
-    if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; DEPO.sira = sirala(l); }
+    if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }
     DEPO.hedefler = () => DEPO.sira.slice(0, 2);
     await isci();
   } catch { /* ısınma isteğe bağlı */ }
 }
+export async function akisSirayiHazirla(l) { if (!DEPO.sira || DEPO.sira.length !== l.length) DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }   // kişisel sıra (sinyal + listendeki kelimeler); uygulama açılışında zaten hazırsa yeniden kurulmaz
 const KAYIT = (ad) => 'kayit:' + (ad || '');
 export async function kayitlariOku(ad) { const l = await yerelOku(KAYIT(ad)); return Array.isArray(l) ? l : []; }
 
@@ -137,6 +139,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const yeni = var_ ? l.filter((x) => x.id !== id) : [{ id: v.id, baslik: v.baslik, kanal: v.kanal, tur: v.tur, sure: v.sure, mp4: v.mp4, kapak: v.kapak }, ...l];
     await yerelYaz(KAYIT(ad()), yeni);
     if (var_) kayitli.delete(id); else kayitli.add(id);
+    KS.olay(v, var_ ? 'kaydiSil' : 'kaydet');
     b.classList.toggle('acik', !var_); b.setAttribute('aria-pressed', String(!var_));
     durum(aktif, var_ ? 'Kayıtlardan çıkarıldı.' : 'Kaydedildi. Hesap > Kaydedilen videolar.'); const bn = sayac; setTimeout(() => { if (bn === sayac) durum(aktif, ''); }, 1600);
   }
@@ -183,9 +186,11 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     liste.querySelectorAll('.kv-sozluk').forEach((x) => { x.hidden = true; });
     liste.querySelectorAll('.kv-satir .secik').forEach((x) => x.classList.remove('secik'));
   };
+  let izSn = 0, dongu = 0, oncekiT = 0;   // etkin videoda gerçekten izlenen süre ve tekrar sayısı (kişisel keşfet sinyali)
   const tik = () => {
     const el = vid(aktif); if (!el) return;
     const t = el.currentTime;
+    if (!el.paused) { izSn += 0.05; if (t < oncekiT - 0.5) dongu++; } oncekiT = t;
     let n = -1;
     for (let k = 0; k < satirlar.length && satirlar[k].bas <= t; k++) n = k;
     if (n >= 0 && t >= satirlar[n].son) n = -1;
@@ -270,6 +275,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   function etkinles(i) {
     if (i === aktif) return;
     const onceki = aktif;
+    if (onceki >= 0 && videolar[onceki]) {   // ayrılan videonun sinyali: hızlı geçme / tam izleme / tekrar
+      const ov = videolar[onceki], elO = vid(onceki), sure = (elO && elO.duration) || ov.sure || 20, oran = izSn / sure;
+      KS.goruldu(ov);
+      if (izSn < 3) KS.olay(ov, 'hizli'); else if (oran >= 0.8) KS.olay(ov, 'tam');
+      if (dongu >= 1) KS.olay(ov, 'tekrar');
+    }
+    izSn = 0; dongu = 0; oncekiT = 0;
     if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
     clearInterval(izleyici); sozlukKapat(); liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; basili = false; satirlar = []; sira = -1; kullaniciDurdu = false;
     aktif = i; const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
@@ -333,7 +345,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     if (b && i === aktif) {   // kelimeye dokun: video HEMEN durur (durmuşsa da çalışır), ilk anlam çıkar
       if (b.classList.contains('secik')) { sozlukKapat(); if (!kullaniciDurdu) el?.play().catch(() => {}); return; }
       try { el?.pause(); } catch { /* yok */ }
-      sozlukKapat(); b.classList.add('secik');
+      sozlukKapat(); b.classList.add('secik'); KS.olay(videolar[i], 'kelime');
       const yaz = b.dataset.s.replace(/[^\w'’-]/g, '');
       const d = kokBul(yaz, dizin || []);
       const ilk = d?.an?.[0] || (d ? ['', d.tr] : null);
