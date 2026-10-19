@@ -11,7 +11,7 @@ rsync -a --exclude 'ses/' --exclude 'sw.js' --exclude 'oynatici*.html' --exclude
 python3 - <<'PY'
 import json, os
 d = json.load(open('www/akis-kendi.json')); d = d if isinstance(d, list) else d.get('videolar', [])
-ids = {v['id'] for v in d}
+ids = {v['id'] for v in d[:8]}   # yalnız ilk 8 gömülü; kalanlar sunucudan
 for k in ('akis-video', 'akis-altyazi'):
     for f in os.listdir('www/' + k):
         if f.split('.')[0] not in ids: os.remove(f'www/{k}/{f}')
