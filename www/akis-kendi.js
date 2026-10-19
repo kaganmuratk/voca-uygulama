@@ -254,19 +254,26 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       try { const l = JSON.parse(localStorage.getItem('voca-oynat-hata') || '[]'); l.push({ t: Date.now(), id: videolar[i]?.id, h: sonHata }); localStorage.setItem('voca-oynat-hata', JSON.stringify(l.slice(-20))); } catch { /* depolama kapalı */ }
     };
     // AbortError/diğer geçici hatalarda engelli SAYMA: video hazır olunca (canplay) yeniden dene; yalnız NotAllowedError kalıcıysa dokunma iste
-    const dene = (deneme = 0) => {
+    // iOS (özellikle Düşük Güç Modu / pil az): sesli otomatik başlatma YASAK, bir kez reddedilince aynı öğede sessiz deneme de reddedilebiliyor (NotAllowedError, Kağan 2026-10-19: 15 videonun 9-10'u).
+    // Bu yüzden HER ZAMAN önce sessiz başlat, başlayınca (kullanıcı daha önce dokunduysa) sesi açmayı dene; açılamazsa sessiz devam. Öğeler ilk dokunuşta "kutsanır" (kutsa()).
+    const sesiGeriAc = () => {
+      if (!sesAcik || bn !== sayac) { if (bn === sayac) durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); return; }
       el.muted = false;
-      el.play().then(() => { sesAcik = true; }).catch((h1) => {
-        if (bn !== sayac || el.dataset.kullanici === String(bn)) return; el.muted = true; sonHata = (h1 && h1.name) || 'hata';
-        el.play().then(() => { if (bn === sayac) durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); }).catch((h2) => {
-          if (bn !== sayac || el.dataset.kullanici === String(bn)) return; sonHata = (h2 && h2.name) || sonHata;
-          const gecici = sonHata !== 'NotAllowedError';
-          if (deneme < (gecici ? 3 : 1)) {   // geçici hatada 3 kez, izin hatasında 1 kez yeniden dene
-            if (deneme === 0 || !gecici) yenidenYukle(el);
-            const bekle = () => { if (bn === sayac) dene(deneme + 1); };
-            if (gecici && el.readyState < 3) { el.addEventListener('canplay', bekle, { once: true }); setTimeout(bekle, 900); } else setTimeout(bekle, 250);
-          } else engelle();
-        });
+      setTimeout(() => {
+        if (bn !== sayac) return;
+        if (el.paused && !kullaniciDurdu && el.dataset.kullanici !== String(bn)) { el.muted = true; el.play().catch(() => {}); durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); } else if (el.muted) durum(i, 'Ses kapalı. Açmak için ekrana dokun.');
+      }, 220);
+    };
+    const dene = (deneme = 0) => {
+      el.muted = true;
+      el.play().then(sesiGeriAc).catch((h) => {
+        if (bn !== sayac || el.dataset.kullanici === String(bn)) return; sonHata = ((h && h.name) || 'hata') + ' r' + el.readyState;
+        const gecici = !/NotAllowed/.test(sonHata);
+        if (deneme < (gecici ? 3 : 2)) {   // geçici hatada 3 kez, izin hatasında 2 kez yeniden dene
+          if (deneme === 0 || !gecici) yenidenYukle(el);
+          const bekle = () => { if (bn === sayac) dene(deneme + 1); };
+          if (gecici && el.readyState < 3) { el.addEventListener('canplay', bekle, { once: true }); setTimeout(bekle, 900); } else setTimeout(bekle, gecici ? 250 : 700);
+        } else engelle();
       });
     };
     hizUygula(el);
@@ -334,7 +341,14 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   hizYazi(); komsulariHazirla(0);
 
   // ——— dokunuşlar ———
-  const sesiAc = () => { sesAcik = true; const el = vid(aktif); if (el && el.muted) { el.muted = false; durum(aktif, ''); } };   // dokunuş = kullanıcı hareketi: sesi açabiliriz
+  // Kullanıcı hareketi içinde her video öğesinde play() çağrısı o öğenin otomatik başlatma iznini kalıcı açar (iOS: "gesture unlock"); sonradan src değişse de geçerli
+  function kutsa() {
+    liste.querySelectorAll('video').forEach((v) => {
+      if (v.dataset.kutsal || v === vid(aktif)) return; v.dataset.kutsal = '1';
+      try { v.muted = true; const p = v.play(); if (p && p.catch) p.catch(() => {}); v.pause(); } catch { /* yok */ }
+    });
+  }
+  const sesiAc = () => { sesAcik = true; kutsa(); const el = vid(aktif); if (el && el.muted) { el.muted = false; durum(aktif, ''); } };   // dokunuş = kullanıcı hareketi: sesi açabiliriz
   liste.addEventListener('touchend', sesiAc, { passive: true });
   liste.addEventListener('contextmenu', (ev) => ev.preventDefault()); liste.addEventListener('selectstart', (ev) => { if (!ev.target.closest?.('input, textarea')) ev.preventDefault(); });   // basılı tutma: seçim/büyüteç/menü çıkmasın
   let surukleSonu = 0;
