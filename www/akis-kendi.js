@@ -7,6 +7,7 @@ import { kisalt } from './akis.js';
 import { yerelOku, yerelYaz } from './yerel.js';
 import { depodanOku, depoyaYaz } from './video-depo.js';
 import * as KS from './akis-kisisel.js';
+export const ilgiSorulduMu = KS.ilgiSorulduMu, ilgiSecenekleri = KS.ilgiSecenekleri, ilgiSor = KS.ilgiSor;
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mutlak = (y) => (PAKET ? SITE + y : y);
@@ -63,7 +64,7 @@ export async function akisOnYukle() {
     await isci();
   } catch { /* ısınma isteğe bağlı */ }
 }
-export async function akisSirayiHazirla(l) { if (!DEPO.sira || DEPO.sira.length !== l.length) DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }   // kişisel sıra (sinyal + listendeki kelimeler); uygulama açılışında zaten hazırsa yeniden kurulmaz
+export async function akisSirayiHazirla(l, zorla) { if (zorla || !DEPO.sira || DEPO.sira.length !== l.length) DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }   // kişisel sıra (sinyal + listendeki kelimeler); uygulama açılışında zaten hazırsa yeniden kurulmaz
 const KAYIT = (ad) => 'kayit:' + (ad || '');
 export async function kayitlariOku(ad) { const l = await yerelOku(KAYIT(ad)); return Array.isArray(l) ? l : []; }
 

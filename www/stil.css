@@ -1082,3 +1082,16 @@ body.video-tam main { padding: 0 !important; max-width: none; }
 /* video akışı: listendeki kelime bu videoda geçiyor ipucu (küçük, sol altta, kendiliğinden kaybolur) */
 .kv-ipucu { position: absolute; left: 12px; right: 76px; bottom: calc(env(safe-area-inset-bottom) + 18px); z-index: 8; width: fit-content; max-width: calc(100% - 88px); padding: 7px 12px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fff; font: 500 13px/1.3 var(--sans); backdrop-filter: blur(6px); pointer-events: none; opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
 .kv-ipucu.gor { opacity: 1; transform: none; }
+
+/* ilk açılış: genel ilgi alanı seçimi (video sekmesi) */
+.ilgi-kap { position: fixed; inset: 0; z-index: 30; background: #2B28F5; color: #fff; display: grid; align-items: end; padding: 0; overflow: auto; }
+.ilgi-ic { padding: calc(env(safe-area-inset-top) + 36px) 22px calc(env(safe-area-inset-bottom) + 24px); }
+.ilgi-ic h2 { font: 400 clamp(38px, 11vw, 52px)/1 var(--serif); margin: 0 0 10px; }
+.ilgi-ic h3 { font: 600 15px/1.2 var(--sans); margin: 26px 0 10px; opacity: .9; }
+.ilgi-ic p { margin: 0 0 20px; font-size: 15px; opacity: .85; }
+.ilgi-chip, .ilgi-sev { display: flex; flex-wrap: wrap; gap: 9px; }
+.ilgi-chip button, .ilgi-sev button { border: 1.5px solid rgba(255, 255, 255, .55); background: transparent; color: #fff; padding: 11px 16px; border-radius: 999px; font: 600 15px/1 var(--sans); cursor: pointer; }
+.ilgi-chip button.acik, .ilgi-sev button.acik { background: #fff; color: #2B28F5; border-color: #fff; }
+.ilgi-alt { margin-top: 30px; display: grid; gap: 10px; }
+.ilgi-alt .btn { background: #FF6B4A; color: #121212; border-color: #FF6B4A; }
+.ilgi-atla { background: none; border: 0; color: #fff; opacity: .8; font: 500 14px/1 var(--sans); padding: 10px; cursor: pointer; }
