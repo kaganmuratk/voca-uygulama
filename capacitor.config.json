@@ -3,10 +3,11 @@
   "appName": "Voca Deney",
   "webDir": "www",
   "ios": {
-    "contentInset": "always",
+    "contentInset": "never",
     "appendUserAgent": "VocaApp"
   },
   "android": {
     "appendUserAgent": "VocaApp"
-  }
+  },
+  "backgroundColor": "#F4F2ED"
 }

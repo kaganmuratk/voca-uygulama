@@ -1074,7 +1074,7 @@ body.video-tam main { padding: 0 !important; max-width: none; }
   /* alt menü: beyaz yüzey, aktif sekme altı çizgili */
   .alt-nav { background: var(--yuzey); backdrop-filter: none; border-top: 1px solid var(--cizgi); }
   .alt-nav a.aktif svg { stroke: var(--murekkep); }
-  .alt-nav a.aktif::after { content: ""; width: 22px; height: 3px; border-radius: 2px; background: var(--murekkep); position: absolute; bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .alt-nav a.aktif::after { content: ""; width: 22px; height: 3px; border-radius: 2px; background: var(--murekkep); position: absolute; bottom: 10px; }
   .alt-nav a { padding-bottom: 8px; }
   body[data-sayfa="video"] .alt-nav { background: color-mix(in srgb, var(--yuzey) 92%, transparent); backdrop-filter: blur(14px); }
 }
@@ -1118,3 +1118,11 @@ body.video-tam main { padding: 0 !important; max-width: none; }
 /* basılı tutma (2x) ekranı seçmesin / mavi seçim ya da büyüteç çıkmasın (Kağan 2026-10-19) */
 .kv, .kv * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .kv-satir .sozcuk { -webkit-touch-callout: none; }
+
+/* güvenli alan (çentik/Dynamic Island/ana ekran çubuğu): içerik her telefonda aynı yerde başlasın. Yerel kabuk contentInset "never": web görünümü tam ekran,
+   üst çubuk durum çubuğunun altına renkle uzanır, yazılar env(safe-area-inset-top) kadar aşağıdan başlar (Kağan 2026-10-19, fotoğraflar). */
+.ust { padding-top: env(safe-area-inset-top); height: calc(var(--ust-h) + env(safe-area-inset-top)); }
+@media (max-width: 720px) { .ust { height: calc(60px + env(safe-area-inset-top)); } }
+/* sayfa yukarı çekilince (lastik/bounce) üstte beyazlık görünmesin: üst çubuğun rengi yukarı doğru uzar; aşağıda lastik etkisi kapalı */
+.ust::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 100vh; background: inherit; pointer-events: none; }
+html, body { overscroll-behavior-y: none; }

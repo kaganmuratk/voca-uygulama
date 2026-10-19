@@ -28,7 +28,7 @@ document.body.classList.toggle('uygulama', UYGULAMA);
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const OYNAT = '<svg viewBox="0 0 10 12"><path d="M0 0l10 6-10 6z"/></svg>';
 
-let BEN = null, BEN_BAKILDI = false, profilAd = '';
+let BEN = null, BEN_BAKILDI = false, profilAd = '', VITRIN_ANAHTAR = null;
 
 // tema: sistem / açık / koyu (bu cihazda saklanır)
 const temaOku = () => { try { return localStorage.getItem('voca-tema') || 'sistem'; } catch { return 'sistem'; } };
@@ -56,7 +56,19 @@ function bildir(m) {
   b.textContent = m; b.classList.add('acik');
   clearTimeout(bildir.z); bildir.z = setTimeout(() => b.classList.remove('acik'), 2600);
 }
-function ustGeri(href, ad) { const g = $('#ustGeri'); if (!g) return; if (!href) { g.hidden = true; return; } g.href = href; g.setAttribute('aria-label', 'Geri: ' + ad); g.title = ad; g.hidden = false; }   // kelime sayfasında başlık çubuğunda yalnız ok (satır yer kaplamasın)
+// durum çubuğu yazı rengi: sayfanın üst çubuk rengi koyuysa açık yazı, açıksa koyu yazı (yalnız uygulama; yerel StatusBar eklentisi)
+function durumCubugu() {
+  const SB = window.Capacitor?.Plugins?.StatusBar; if (!SB) return;
+  try {
+    let koyu = document.body.classList.contains('video-tam');
+    if (!koyu) {
+      const u = document.querySelector('.ust'); const m = u && /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(u).backgroundColor);
+      if (m) koyu = (0.299 * +m[1] + 0.587 * +m[2] + 0.114 * +m[3]) < 140;
+    }
+    SB.setStyle({ style: koyu ? 'DARK' : 'LIGHT' }).catch(() => {});   // DARK = açık renkli yazı (koyu zemin için)
+  } catch { /* eklenti yok */ }
+}
+function ustGeri(href, ad, tikla) { const g = $('#ustGeri'); if (!g) return; g.onclick = tikla || null; if (!href) { g.hidden = true; return; } g.href = href; g.setAttribute('aria-label', 'Geri: ' + ad); g.title = ad; g.hidden = false; }   // kelime sayfasında başlık çubuğunda yalnız ok (satır yer kaplamasın)
 const git = (h) => { if (location.hash === h) yonlendir(); else location.hash = h; };
 // misafir bir işlem yapmak isteyince: bulunduğu yeri hatırla, giriş/kayıt ekranına götür, sonra geri getir
 function girisGerekli() {
@@ -159,7 +171,7 @@ async function yonlendir() {
   document.body.dataset.ekran = '';
   for (const [r, f] of YOLLAR) {
     const m = h.match(r);
-    if (m) { window.scrollTo(0, 0); try { await f(m); } catch (x) { if (x.message !== 'giriş') hataGoster(x); } document.body.dataset.ekran = uyg.querySelector('.basliksoz') ? 'kelime' : ''; hosgeldin(); return; }
+    if (m) { window.scrollTo(0, 0); try { await f(m); } catch (x) { if (x.message !== 'giriş') hataGoster(x); } document.body.dataset.ekran = uyg.querySelector('.basliksoz') ? 'kelime' : ''; hosgeldin(); setTimeout(durumCubugu, 60); return; }
   }
   git('#/');
 }
@@ -386,10 +398,14 @@ async function sozlukListesi(kap, { odak = false, baslangic = '' } = {}) {
     </div>
     <div class="satirlar sozluk-sonuc"></div>`;
   const sonuc = $('.sozluk-sonuc', kap);
-  const vitrin = (() => { // açılışta bir kez karıştırılır, yazarken/eklerken değişmez
-    const harita = new Map(d.map((x) => [x.k, x])), havuz = SIK.slice();
-    for (let i = havuz.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [havuz[i], havuz[j]] = [havuz[j], havuz[i]]; }
-    return havuz.slice(0, 40).map((k) => harita.get(k)).filter(Boolean);
+  const vitrin = (() => { // uygulama açılışında BİR kez karıştırılır; sayfalar arası gezinmede, yazarken, eklerken değişmez (Kağan 2026-10-19)
+    const harita = new Map(d.map((x) => [x.k, x]));
+    if (!VITRIN_ANAHTAR) {
+      const havuz = SIK.slice();
+      for (let i = havuz.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [havuz[i], havuz[j]] = [havuz[j], havuz[i]]; }
+      VITRIN_ANAHTAR = havuz.slice(0, 40);
+    }
+    return VITRIN_ANAHTAR.map((k) => harita.get(k)).filter(Boolean);
   })();
   const ciz = () => {
     const q = f.q.trim().toLowerCase();
@@ -944,6 +960,7 @@ const kisaListe = (satirlar, n, id) => satirlar.length <= n ? satirlar.join('')
   : satirlar.slice(0, n).join('') + `<div class="gizli-satirlar" id="${id}" hidden>${satirlar.slice(n).join('')}</div><button class="daha-fazla" data-ac="${id}">Daha fazla göster · ${satirlar.length - n}</button>`;
 
 async function pratik() {
+  ustGeri(null);
   if (!BEN) {
     uyg.innerHTML = `<section class="pratik-ana">
       <div class="pa-bas"><div class="liste-ust"><h1 class="baslik-l">Pratik</h1></div>
@@ -1004,7 +1021,8 @@ async function sihirbaz(kelimeler, { zor = false } = {}) {
     $('#turOzet').textContent = `Bu turda ${p.kelimeSay} kelime, ${p.sira.length} soru${p.kelimeSay < secili.size ? ` · kalan ${secili.size - p.kelimeSay} kelime sonraki turda` : ''}`;
   };
   const ciz = () => {
-    uyg.innerHTML = `<section class="pratik sihirbaz"><a class="geri" href="#/pratik" id="geri">← Pratik</a><div class="soru">
+    ustGeri('#/pratik', 'Pratik', (ev) => { ev.preventDefault(); pratik(); });
+    uyg.innerHTML = `<section class="pratik sihirbaz"><div class="soru">
       <h1 class="baslik-l">Hangi kelimeler?</h1>
       <div class="buyuk-secenekler">${gruplar.map(([ad, f], i) => `<button class="buyuk-secenek ${!tekTek && i === grup ? 'secili' : ''}" data-g="${i}"><b>${e(ad)}</b><span>${kelimeler.filter(f).length} kelime</span></button>`).join('')}
         <button class="buyuk-secenek ${tekTek ? 'secili' : ''}" id="tekTekBtn"><b>Kendim seçeceğim</b><span>${tekTek ? 'aşağıdan seç' : 'kelimeleri tek tek seç'}</span></button></div>
@@ -1020,7 +1038,6 @@ async function sihirbaz(kelimeler, { zor = false } = {}) {
       <p class="tur-ozet" id="turOzet"></p>
       <div class="pa-eylem"><button class="btn vurgu buyuk" id="ileri" ${secili.size ? '' : 'disabled'}>Başla <span class="ok">→</span></button></div>
     </div></section>`;
-    $('#geri').onclick = (ev) => { ev.preventDefault(); pratik(); };
     $$('[data-g]').forEach((b) => b.onclick = () => { grup = +b.dataset.g; tekTek = false; secili.clear(); kelimeler.filter(gruplar[grup][1]).forEach((k) => secili.add(k.id)); ciz(); });
     $('#tekTekBtn').onclick = () => { if (!tekTek) { tekTek = true; ciz(); } }; // klavye kendiliğinden açılmasın: odak yok
     if (tekTek) {
@@ -1214,8 +1231,8 @@ async function pratikRapor(id, yarida = false) {
         <a class="metin-dugme" href="#/k/${encodeURIComponent(w)}">Kelimeye git →</a></div>
     </details>`;
   };
+  ustGeri('#/pratik', 'Pratik');
   uyg.innerHTML = `<section class="dar rapor">
-    <a class="geri" href="#/pratik">← Pratik</a>
     <h1 class="baslik-l">${cevap.length ? `${cevap.length} sorudan <em>${dogru}</em> doğru.` : 'Cevaplanan soru yok.'}</h1>
     ${yarida || atla ? `<p class="alt-yazi">${[yarida ? 'Ara verdin, kaldığın yer kaydedildi.' : '', atla ? `${atla} soru atlandı.` : ''].filter(Boolean).join(' ')}</p>` : ''}
     <div class="pa-eylem rapor-eylem">${yarida && oturumOku() ? `<button class="btn vurgu buyuk" id="devamEt">Devam et <span class="ok">→</span></button>` : `<button class="btn vurgu buyuk" id="yine">Bir tur daha <span class="ok">→</span></button>`}</div>
