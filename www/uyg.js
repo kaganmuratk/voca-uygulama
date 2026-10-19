@@ -6,6 +6,8 @@ import { akisSayfasi, akisIsit } from './akis.js';
 import { kendiAkis, akisOnYukle, kayitlariOku, akisSirayiHazirla, ilgiSorulduMu, ilgiSecenekleri, ilgiSor } from './akis-kendi.js';
 import { yerelOku, yerelYaz } from './yerel.js';
 import { depoBoyutu, depoyuBosalt } from './video-depo.js';
+import { profilBaslat } from './profil-senkron.js';
+import { sinyalSifirla } from './akis-kisisel.js';
 import { ayarOku as hatAyarOku, ayarYaz as hatAyarYaz, hatirlatmaUygula, hatirlatmaVar } from './hatirlatma.js';
 import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz, jsonAl } from './ortam.js';
 import { videoSayfasi } from './video.js';
@@ -26,7 +28,7 @@ document.body.classList.toggle('uygulama', UYGULAMA);
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const OYNAT = '<svg viewBox="0 0 10 12"><path d="M0 0l10 6-10 6z"/></svg>';
 
-let BEN = null, BEN_BAKILDI = false;
+let BEN = null, BEN_BAKILDI = false, profilAd = '';
 
 // tema: sistem / açık / koyu (bu cihazda saklanır)
 const temaOku = () => { try { return localStorage.getItem('voca-tema') || 'sistem'; } catch { return 'sistem'; } };
@@ -54,6 +56,7 @@ function bildir(m) {
   b.textContent = m; b.classList.add('acik');
   clearTimeout(bildir.z); bildir.z = setTimeout(() => b.classList.remove('acik'), 2600);
 }
+function ustGeri(href, ad) { const g = $('#ustGeri'); if (!g) return; if (!href) { g.hidden = true; return; } g.href = href; g.setAttribute('aria-label', 'Geri: ' + ad); g.title = ad; g.hidden = false; }   // kelime sayfasında başlık çubuğunda yalnız ok (satır yer kaplamasın)
 const git = (h) => { if (location.hash === h) yonlendir(); else location.hash = h; };
 // misafir bir işlem yapmak isteyince: bulunduğu yeri hatırla, giriş/kayıt ekranına götür, sonra geri getir
 function girisGerekli() {
@@ -147,6 +150,8 @@ async function yonlendir() {
     catch (x) { BEN = x.cevrimdisi ? await yerelOku('ben') : null; }   // çevrimdışı açılışta son bilinen hesap (liste önbellekten gelir)
     BEN_BAKILDI = true;
   }
+  ustGeri(null);
+  if (BEN && profilAd !== BEN.ad && UYGULAMA) { profilAd = BEN.ad; profilBaslat(istek, BEN.ad).then((r) => { if (r && r.tamam) sinyalSifirla(); }); }   // ilgi/sinyal/kaydedilen videolar hesapla senkron (uygulamada)
   document.body.classList.toggle('misafir', !BEN);
   const ad = h.startsWith('#/hesap') || h.startsWith('#/giris') ? 'hesap' : h.startsWith('#/liste') ? 'liste' : h.startsWith('#/pratik') || h.startsWith('#/gecmis') ? 'pratik' : h.startsWith('#/video') ? 'video' : h.startsWith('#/ara') || h.startsWith('#/ekle') || h === '#/' || h === '#' ? 'ara' : '';
   $$('[data-yol]').forEach((a) => a.classList.toggle('aktif', a.dataset.yol === ad));
@@ -434,7 +439,7 @@ async function ara({ ekle: topluAcik = false } = {}) {
   let hazir = ''; try { hazir = sessionStorage.getItem('voca-ekle') || ''; sessionStorage.removeItem('voca-ekle'); } catch {}
   if (hazir) topluAcik = true;
   uyg.innerHTML = `
-  <div class="liste-ust"><h1 class="baslik-l">Ara</h1><button class="toplu-bag" id="topluBtn" aria-expanded="false"><i aria-hidden="true">+</i><span>Toplu ekle</span></button></div>
+  <div class="liste-ust"><h1 class="baslik-l">Sözlük</h1><button class="toplu-bag" id="topluBtn" aria-expanded="false"><i aria-hidden="true">+</i><span>Toplu ekle</span></button></div>
   <div id="toplu" hidden></div>
   <section id="sozluk" class="ara-sozluk"></section>`;
   const toplu = $('#toplu'), btn = $('#topluBtn');
@@ -536,7 +541,8 @@ async function ogren(ad) {
   let { sozluk: s, benim: b, klipler = [] } = await istek('/kelime/' + encodeURIComponent(ad));
   if (s && WEB_BASIT) { s = basitle(s); klipler = []; }
   if (!s) {
-    uyg.innerHTML = `<a class="geri" href="#/liste">← Kelimelerim</a>
+    ustGeri('#/liste', 'Kelimelerim');
+    uyg.innerHTML = `
       <div class="ogren-bas"><div><h1 class="basliksoz">${e(ad)}<span class="nokta">.</span></h1></div></div>
       <div class="dar bos"><p class="alt-yazi">${b ? 'İnceleniyor. Sözlüğe eklenince kartı burada açılır.' : 'Bu kelime sözlükte yok.'}</p>
       ${b ? '<p style="margin-top:24px"><button class="btn hayalet" id="kaldir">Listemden çıkar</button></p>' : ''}</div>`;
@@ -575,8 +581,8 @@ async function ogren(ad) {
   const seslerHtml = cok
     ? `<button class="ses" data-b="uk"><span class="oynat">${OYNAT}</span><b>UK</b><span>sentetik</span></button><button class="ses" data-b="us"><span class="oynat">${OYNAT}</span><b>US</b><span>sentetik</span></button>`
     : ['uk', 'us'].filter((x) => s.ipa[x] || s.ses[x]).map((x) => `<button class="ses" data-b="${x}"><span class="oynat">${OYNAT}</span><b>${x.toUpperCase()}</b><span>/${e(s.ipa[x])}/</span></button>`).join('');
+  ustGeri(b ? '#/liste' : '#/ara', b ? 'Kelimelerim' : 'Sözlük');
   uyg.innerHTML = `
-  <a class="geri" href="${b ? '#/liste' : '#/ara'}">← ${b ? 'Kelimelerim' : 'Ara'}</a>
   <header class="ogren-bas">
     <div>
       <div class="turler"><span class="ust-tur">${turler.map(e).join(' · ') || 'kalıp'}</span>${s.seviye ? `<span class="seviye">${s.seviye}</span>` : ''}</div>

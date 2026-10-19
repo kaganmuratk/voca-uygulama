@@ -1095,3 +1095,11 @@ body.video-tam main { padding: 0 !important; max-width: none; }
 .ilgi-alt { margin-top: 30px; display: grid; gap: 10px; }
 .ilgi-alt .btn { background: #FF6B4A; color: #121212; border-color: #FF6B4A; }
 .ilgi-atla { background: none; border: 0; color: #fff; opacity: .8; font: 500 14px/1 var(--sans); padding: 10px; cursor: pointer; }
+
+/* başlık çubuğunda geri oku (kelime sayfası): "← Ara" satırı yerine yalnız ok, yer kaplamaz (Kağan 2026-10-19) */
+.ust-sol { justify-self: start; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ust-geri { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; text-decoration: none; font: 400 19px/1 var(--sans); color: var(--murekkep); border: 1px solid var(--cizgi); background: var(--yuzey); flex: none; }
+.ust-geri:hover { border-color: var(--murekkep); }
+@media (max-width: 720px) {
+  body[data-ekran="kelime"] .ust-geri { background: transparent; color: var(--band-yazi); border-color: color-mix(in srgb, var(--band-yazi) 45%, transparent); }
+}

@@ -1,6 +1,7 @@
 // Kişisel keşfet (v1, cihazda, model yok — basit puanlar; plan: Voca-Akisi-Plani §9.3/9.6). Her videonun etiketlerine (tür, alt tür, hashtag, kanal) kişisel ağırlık yazılır;
 // akış sırası açılışta bu ağırlıklar + listendeki kelimelerin videoda geçmesi + görülmemişlik ile kurulur. Aynı kanal art arda yok, aynı türden en çok 2 art arda, ~%20 keşif.
 import { yerelOku, yerelYaz } from './yerel.js';
+import { profilPlanla } from './profil-senkron.js';
 
 const ANAHTAR = 'akis-sinyal';
 const HAFTA = 7 * 24 * 3600 * 1000;
@@ -16,7 +17,8 @@ export async function sinyalYukle() {
   if (hf > 0) { for (const k of Object.keys(D.w)) { D.w[k] *= Math.pow(0.8, hf); if (Math.abs(D.w[k]) < 0.05) delete D.w[k]; } D.an = Date.now(); }   // haftada ×0,8 eskir
   return D;
 }
-const kaydet = () => { clearTimeout(yazZ); yazZ = setTimeout(() => { if (D) yerelYaz(ANAHTAR, D); }, 800); };
+const kaydet = () => { clearTimeout(yazZ); yazZ = setTimeout(() => { if (D) { yerelYaz(ANAHTAR, D); profilPlanla(); } }, 800); };
+export const sinyalSifirla = () => { D = null; };   // senkron sonrası yerel kaydı yeniden oku
 export async function olay(v, tur, katsayi = 1) {   // tur: PUAN anahtarı
   const d = await sinyalYukle(); const p = (PUAN[tur] || 0) * katsayi;
   if (p > 0 && ['kaydet', 'tam', 'tekrar'].includes(tur) && !d.iyi.includes(v.id)) { d.iyi.push(v.id); if (d.iyi.length > 25) d.iyi.shift(); }   // beğenilen videolar: komşuları (benzer) öne alınır

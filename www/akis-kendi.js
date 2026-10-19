@@ -7,6 +7,7 @@ import { kisalt } from './akis.js';
 import { yerelOku, yerelYaz } from './yerel.js';
 import { depodanOku, depoyaYaz } from './video-depo.js';
 import * as KS from './akis-kisisel.js';
+import { profilPlanla } from './profil-senkron.js';
 export const ilgiSorulduMu = KS.ilgiSorulduMu, ilgiSecenekleri = KS.ilgiSecenekleri, ilgiSor = KS.ilgiSor;
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -138,7 +139,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const v = videolar.find((x) => x.id === id); if (!v) return;
     const l = await kayitlariOku(ad()); const var_ = l.some((x) => x.id === id);
     const yeni = var_ ? l.filter((x) => x.id !== id) : [{ id: v.id, baslik: v.baslik, kanal: v.kanal, tur: v.tur, sure: v.sure, mp4: v.mp4, kapak: v.kapak }, ...l];
-    await yerelYaz(KAYIT(ad()), yeni);
+    await yerelYaz(KAYIT(ad()), yeni); profilPlanla();
     if (var_) kayitli.delete(id); else kayitli.add(id);
     KS.olay(v, var_ ? 'kaydiSil' : 'kaydet');
     b.classList.toggle('acik', !var_); b.setAttribute('aria-pressed', String(!var_));
