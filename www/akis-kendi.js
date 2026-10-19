@@ -123,6 +123,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
           <button class="kv-dugme kv-hiz" type="button" aria-label="Hız"><b>1x</b><span>Hız</span></button>
           <button class="kv-dugme kv-kel" type="button" aria-label="Videodaki kelimeler"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M4 6h16M4 12h10M4 18h16"/></svg><span>Kelimeler</span></button>
           <button class="kv-dugme kv-paylas" type="button" aria-label="Paylaş"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></svg><span>Paylaş</span></button>
+          <button class="kv-dugme kv-ilgisiz" type="button" aria-label="İlgilenmiyorum"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg><span>İlgisiz</span></button>
         </div>
         <div class="kv-hizrozet" hidden>2x ▸▸</div>
         <div class="kv-kelpanel" hidden></div>
@@ -206,6 +207,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   // ——— etkinleştirme ———
   const hizUygula = (el) => { if (!el) return; try { el.defaultPlaybackRate = hiz; el.playbackRate = basili ? 2 : hiz; } catch { /* yok */ } };
   const hizYazi = () => liste.querySelectorAll('.kv-hiz b').forEach((b) => { b.textContent = hiz + 'x'; });
+  // "İlgilenmiyorum": videonun etiketlerine güçlü eksi puan, bir daha gösterilmez, bir sonrakine geçilir
+  function ilgisizYap(i, v) {
+    KS.olay(v, 'ilgisiz'); KS.gizle(v);
+    durum(i, 'Tamam, buna benzer videoları azaltacağız.'); const bn = sayac; setTimeout(() => { if (bn === sayac) durum(aktif, ''); }, 1500);
+    const k = kart(i); if (k) k.classList.add('ilgisiz-gecti');
+    setTimeout(() => { kart(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 450);
+  }
   async function paylas(v) {
     const url = SITE + '/#/video/ac/' + v.id, P = window.Capacitor?.Plugins?.Share;
     try {
@@ -330,6 +338,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const i = [...liste.children].indexOf(k), el = vid(i), v = videolar[i];
     if (ev.target.closest('.kv-hiz')) { hiz = HIZLAR[(HIZLAR.indexOf(hiz) + 1) % HIZLAR.length]; try { localStorage.setItem('voca-hiz', String(hiz)); } catch { /* yok */ } hizYazi(); hizUygula(el); return; }
     if (ev.target.closest('.kv-paylas')) { paylas(v); return; }
+    if (ev.target.closest('.kv-ilgisiz')) { ilgisizYap(i, v); return; }
     if (ev.target.closest('.kv-kel')) { if (i === aktif) kelPaneliAc(k, v); return; }
     if (ev.target.closest('.kp-kapat')) { kelPaneliKapat(); return; }
     const ke = ev.target.closest('.kp-ekle');

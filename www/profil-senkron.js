@@ -14,7 +14,7 @@ export function birlestir(yerel, uzak) {
   const iyi = topla(uzak.iyi, yerel.iyi).slice(-25);
   const kayit = []; const goruldu = new Set();
   for (const v of [...(yerel.kayit || []), ...(uzak.kayit || [])]) if (v && v.id && !goruldu.has(v.id)) { goruldu.add(v.id); kayit.push(v); }
-  return { w, gor, iyi, kayit, ilgiTamam: !!(yerel.ilgiTamam || uzak.ilgiTamam) };
+  return { w, gor, iyi, gizli: topla(uzak.gizli, yerel.gizli), kayit, ilgiTamam: !!(yerel.ilgiTamam || uzak.ilgiTamam) };
 }
 const ayni = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -30,7 +30,7 @@ export async function profilSenkron() {
     const yerel = { ...((await yerelOku('akis-sinyal')) || {}), kayit: (await yerelOku('kayit:' + ad)) || [], ilgiTamam: (() => { try { return !!localStorage.getItem('voca-ilgi-tamam'); } catch { return false; } })() };
     const son = birlestir(yerel, uzak.veri);
     // yerele yaz
-    await yerelYaz('akis-sinyal', { w: son.w, gor: son.gor, iyi: son.iyi, an: yerel.an || Date.now() });
+    await yerelYaz('akis-sinyal', { w: son.w, gor: son.gor, iyi: son.iyi, gizli: son.gizli, an: yerel.an || Date.now() });
     await yerelYaz('kayit:' + ad, son.kayit);
     if (son.ilgiTamam) { try { localStorage.setItem('voca-ilgi-tamam', '1'); } catch { /* yok */ } }
     const kirli = (() => { try { return !!localStorage.getItem(KIRLI); } catch { return false; } })();

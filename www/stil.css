@@ -1103,3 +1103,14 @@ body.video-tam main { padding: 0 !important; max-width: none; }
 @media (max-width: 720px) {
   body[data-ekran="kelime"] .ust-geri { background: transparent; color: var(--band-yazi); border-color: color-mix(in srgb, var(--band-yazi) 45%, transparent); }
 }
+
+.kv-ilgisiz svg { stroke-width: 1.8; }
+.kv-kart.ilgisiz-gecti .kv-sahne { opacity: .45; transition: opacity .3s; }
+
+/* koyu tema: Hesap üst alanı zeminle karışmasın → krem alan, koyu yazı */
+@media (max-width: 720px) {
+  :root[data-tema="koyu"] body[data-sayfa="hesap"] { --band: #F4F2ED; --band-yazi: #121212; --band-soluk: rgba(0, 0, 0, .12); }
+}
+@media (max-width: 720px) and (prefers-color-scheme: dark) {
+  :root:not([data-tema="acik"]) body[data-sayfa="hesap"] { --band: #F4F2ED; --band-yazi: #121212; --band-soluk: rgba(0, 0, 0, .12); }
+}

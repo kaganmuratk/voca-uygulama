@@ -5,14 +5,14 @@ import { profilPlanla } from './profil-senkron.js';
 
 const ANAHTAR = 'akis-sinyal';
 const HAFTA = 7 * 24 * 3600 * 1000;
-export const PUAN = { tam: 2, tekrar: 3, kaydet: 5, kaydiSil: -5, kelime: 1, hizli: -2 };   // başlangıç değerleri (denemeyle ayarlanır)
+export const PUAN = { tam: 2, tekrar: 3, kaydet: 5, kaydiSil: -5, kelime: 1, hizli: -2, ilgisiz: -5 };   // başlangıç değerleri (denemeyle ayarlanır)
 let D = null, yazZ = null;   // { w: {etiket: puan}, gor: {id: sayı}, an: son eskitme zamanı }
 
 export const etiketler = (v) => [v.ilgi && 'i:' + v.ilgi, v.zor && 'z:' + v.zor, v.tur && 't:' + v.tur, v.alt && 'a:' + v.alt, v.etiket && 'e:' + v.etiket, v.kanal && v.kanal !== 'Kaynak belirtilmemiş' && 'k:' + v.kanal, ...(v.konu || []).slice(0, 3).map((k) => 'o:' + k)].filter(Boolean);   // genel ilgi + zorluk + tür + alt tür + hashtag + kanal + konu kelimeleri
 
 export async function sinyalYukle() {
   if (D) return D;
-  D = (await yerelOku(ANAHTAR)) || { w: {}, gor: {}, iyi: [], an: Date.now() }; if (!D.iyi) D.iyi = [];
+  D = (await yerelOku(ANAHTAR)) || { w: {}, gor: {}, iyi: [], gizli: [], an: Date.now() }; if (!D.iyi) D.iyi = []; if (!D.gizli) D.gizli = [];
   const hf = Math.floor((Date.now() - (D.an || Date.now())) / HAFTA);
   if (hf > 0) { for (const k of Object.keys(D.w)) { D.w[k] *= Math.pow(0.8, hf); if (Math.abs(D.w[k]) < 0.05) delete D.w[k]; } D.an = Date.now(); }   // haftada ×0,8 eskir
   return D;
@@ -22,9 +22,13 @@ export const sinyalSifirla = () => { D = null; };   // senkron sonrası yerel ka
 export async function olay(v, tur, katsayi = 1) {   // tur: PUAN anahtarı
   const d = await sinyalYukle(); const p = (PUAN[tur] || 0) * katsayi;
   if (p > 0 && ['kaydet', 'tam', 'tekrar'].includes(tur) && !d.iyi.includes(v.id)) { d.iyi.push(v.id); if (d.iyi.length > 25) d.iyi.shift(); }   // beğenilen videolar: komşuları (benzer) öne alınır
-  for (const e of etiketler(v)) d.w[e] = Math.max(-10, Math.min(20, (d.w[e] || 0) + (e.startsWith('k:') || e.startsWith('o:') ? p / 2 : p)));
+  for (const e of etiketler(v)) {
+    if (tur === 'ilgisiz' && e.startsWith('z:')) continue;   // "ilgilenmiyorum" konuyla ilgilidir, zorlukla değil
+    d.w[e] = Math.max(-10, Math.min(20, (d.w[e] || 0) + (e.startsWith('k:') || e.startsWith('o:') || (tur === 'ilgisiz' && e.startsWith('i:')) ? p / 2 : p)));
+  }
   kaydet();
 }
+export async function gizle(v) { const d = await sinyalYukle(); if (!d.gizli.includes(v.id)) d.gizli.push(v.id); kaydet(); }   // 'ilgilenmiyorum' dediklerin akıştan çıkar
 export async function goruldu(v) { const d = await sinyalYukle(); d.gor[v.id] = (d.gor[v.id] || 0) + 1; kaydet(); }
 
 // listendeki kelime formları: kelime listesi ('liste:<ad>') yerel kopyadan
@@ -43,6 +47,7 @@ export function eslesenler(v, set) {   // videodaki (sz) kelimelerden listede ol
 
 export async function sirala(liste, { set } = {}) {
   const d = await sinyalYukle(); set = set || await listeKelimeleri();
+  { const kalan0 = liste.filter((v) => !d.gizli.includes(v.id)); if (kalan0.length >= 5) liste = kalan0; }   // gizlenenler çıkar (çok az kalırsa akış boşalmasın)
   const iyiKomsu = new Set(); for (const v of liste) if (d.iyi.includes(v.id)) for (const b of v.benzer || []) iyiKomsu.add(b);
   const puan = new Map(liste.map((v) => {
     let p = etiketler(v).reduce((a, e) => a + (d.w[e] || 0), 0);
