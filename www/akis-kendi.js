@@ -247,25 +247,33 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const el = vid(i), k = kart(i), bn = sayac; if (!el || !k || el.dataset.basladi === String(bn)) return;
     el.dataset.basladi = String(bn);
     if (Math.abs(el.currentTime) > 0.2) { try { el.currentTime = 0; } catch { /* yok */ } }
-    const engelle = () => {   // gerçekten engelli (Düşük Güç Modu vb.): spinner KALMAZ, oynat simgesi çıkar
+    let sonHata = '';
+    const engelle = () => {   // gerçekten engelli (Düşük Güç Modu vb.): spinner KALMAZ, oynat simgesi çıkar. Küçük kod: neden (Kağan'a tanı için)
       otoEngelli = true; if (bn !== sayac || el.dataset.kullanici === String(bn)) return;
-      k.classList.remove('yukleniyor'); k.classList.add('durdu'); k.dataset.oto = '1'; k.querySelector('.kv-oyna').hidden = false; durum(i, 'Başlatmak için dokun.');
+      k.classList.remove('yukleniyor'); k.classList.add('durdu'); k.dataset.oto = '1'; k.querySelector('.kv-oyna').hidden = false; durum(i, 'Başlatmak için dokun.' + (sonHata ? ` (${sonHata})` : ''));
+      try { const l = JSON.parse(localStorage.getItem('voca-oynat-hata') || '[]'); l.push({ t: Date.now(), id: videolar[i]?.id, h: sonHata }); localStorage.setItem('voca-oynat-hata', JSON.stringify(l.slice(-20))); } catch { /* depolama kapalı */ }
     };
-    const dene = (ikinci) => {
+    // AbortError/diğer geçici hatalarda engelli SAYMA: video hazır olunca (canplay) yeniden dene; yalnız NotAllowedError kalıcıysa dokunma iste
+    const dene = (deneme = 0) => {
       el.muted = false;
-      el.play().then(() => { sesAcik = true; }).catch(() => {
-        if (bn !== sayac || el.dataset.kullanici === String(bn)) return; el.muted = true;
-        el.play().then(() => { if (bn === sayac) durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); }).catch(() => {
-          if (bn !== sayac || el.dataset.kullanici === String(bn)) return;
-          if (!ikinci) { yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(true); }, 250); } else engelle();   // önce kaynağı yeniden bağlayıp bir kez daha dene (iOS çözücü takılması)
+      el.play().then(() => { sesAcik = true; }).catch((h1) => {
+        if (bn !== sayac || el.dataset.kullanici === String(bn)) return; el.muted = true; sonHata = (h1 && h1.name) || 'hata';
+        el.play().then(() => { if (bn === sayac) durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); }).catch((h2) => {
+          if (bn !== sayac || el.dataset.kullanici === String(bn)) return; sonHata = (h2 && h2.name) || sonHata;
+          const gecici = sonHata !== 'NotAllowedError';
+          if (deneme < (gecici ? 3 : 1)) {   // geçici hatada 3 kez, izin hatasında 1 kez yeniden dene
+            if (deneme === 0 || !gecici) yenidenYukle(el);
+            const bekle = () => { if (bn === sayac) dene(deneme + 1); };
+            if (gecici && el.readyState < 3) { el.addEventListener('canplay', bekle, { once: true }); setTimeout(bekle, 900); } else setTimeout(bekle, 250);
+          } else engelle();
         });
       });
     };
     hizUygula(el);
-    dene(false);
+    dene(0);
     setTimeout(() => {   // 2,5 sn içinde hâlâ oynamıyorsa (kullanıcı durdurmadıysa, simge yoksa): kaynağı yeniden bağla, bir kez daha
       if (bn !== sayac || !el.paused || kullaniciDurdu || el.dataset.kullanici === String(bn) || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
-      el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(true); }, 250);
+      el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(1); }, 250);
     }, 2500);
     const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor'); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
     if (!el.paused && el.readyState >= 3) oynadi(); else el.addEventListener('playing', oynadi);
@@ -328,11 +336,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   // ——— dokunuşlar ———
   const sesiAc = () => { sesAcik = true; const el = vid(aktif); if (el && el.muted) { el.muted = false; durum(aktif, ''); } };   // dokunuş = kullanıcı hareketi: sesi açabiliriz
   liste.addEventListener('touchend', sesiAc, { passive: true });
+  liste.addEventListener('contextmenu', (ev) => ev.preventDefault()); liste.addEventListener('selectstart', (ev) => { if (!ev.target.closest?.('input, textarea')) ev.preventDefault(); });   // basılı tutma: seçim/büyüteç/menü çıkmasın
   let surukleSonu = 0;
   liste.addEventListener('click', (ev) => {
     sesiAc();
     const k = ev.target.closest('.kv-kart'); if (!k) return;
     if (Date.now() - surukleSonu < 350 || Date.now() - basiliSon < 350) { ev.preventDefault(); ev.stopPropagation(); return; }   // sürükleme / basılı tutma (2x) sonrası click yutulur
+    { const pa = k.querySelector('.kv-kelpanel'); if (pa && !pa.hidden && !ev.target.closest('.kp-ekle')) { kelPaneliKapat(); return; } }   // kelime paneli açıkken ekranın herhangi bir yerine dokunmak kapatır (yalnız × değil)
     const kb = ev.target.closest('.kv-kaydet');
     if (kb) { kaydetDegistir(k.dataset.id, kb); return; }
     const i = [...liste.children].indexOf(k), el = vid(i), v = videolar[i];

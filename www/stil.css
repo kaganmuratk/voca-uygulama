@@ -1114,3 +1114,7 @@ body.video-tam main { padding: 0 !important; max-width: none; }
 @media (max-width: 720px) and (prefers-color-scheme: dark) {
   :root:not([data-tema="acik"]) body[data-sayfa="hesap"] { --band: #F4F2ED; --band-yazi: #121212; --band-soluk: rgba(0, 0, 0, .12); }
 }
+
+/* basılı tutma (2x) ekranı seçmesin / mavi seçim ya da büyüteç çıkmasın (Kağan 2026-10-19) */
+.kv, .kv * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.kv-satir .sozcuk { -webkit-touch-callout: none; }
