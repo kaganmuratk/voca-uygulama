@@ -3,7 +3,7 @@
 import { bicimRegex, kacis } from './bicim.js';
 import { klipOynatici } from './klip.js';
 import { akisSayfasi, akisIsit } from './akis.js';
-import { kendiAkis, akisOnYukle, kayitlariOku, akisSirayiHazirla, ilgiSorulduMu, ilgiSecenekleri, ilgiSor } from './akis-kendi.js';
+import { kendiAkis, sekmeCubugu, sekmeBagla, takipVideolari, akisOnYukle, kayitlariOku, akisSirayiHazirla, ilgiSorulduMu, ilgiSecenekleri, ilgiSor } from './akis-kendi.js';
 import { yerelOku, yerelYaz } from './yerel.js';
 import { depoBoyutu, depoyuBosalt } from './video-depo.js';
 import { profilBaslat } from './profil-senkron.js';
@@ -11,6 +11,7 @@ import { sinyalSifirla } from './akis-kisisel.js';
 import { ayarOku as hatAyarOku, ayarYaz as hatAyarYaz, hatirlatmaUygula, hatirlatmaVar } from './hatirlatma.js';
 import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz, jsonAl } from './ortam.js';
 import { videoSayfasi } from './video.js';
+import { kokAdaylari } from './kok.js';
 let klipTemizle = () => {};
 const $ = (s, k = document) => k.querySelector(s);
 const $$ = (s, k = document) => [...k.querySelectorAll(s)];
@@ -40,6 +41,7 @@ temaUygula();
 
 // ——— sunucu ———
 async function istek(yol, { method = 'GET', govde, sessiz } = {}) {
+  if (method !== 'GET' && !/^\/(profil|kontrol)/.test(yol)) onbellekGecersiz();   // liste/pratik/hesap değişti: hızlı okuma kopyaları eskidi
   let sonuc;
   try { sonuc = await apiIstek(yol, { method, govde }); }
   catch (x) { const h = new Error('Bağlantı yok. İnternetini kontrol et.'); h.cevrimdisi = true; throw h; }   // uygulama çevrimdışıyken ham ağ hatası yerine anlaşılır mesaj
@@ -78,9 +80,37 @@ function girisGerekli() {
 const yukleniyor = () => { uyg.innerHTML = '<div class="yukleniyor"><i></i></div>'; };
 
 // Kelime listem: sunucudan; çevrimdışıysa (uygulama) son kaydedilen kopya. Başarılı her okuma cihaza yazılır.
+// Hızlı okuma (H1, Kağan 2026-10-25 "sayfa geçişi yavaş"): her sekme geçişi ağ turunu beklemesin. Elde bu oturumda ya da cihazda kalmış kopya varsa
+// HEMEN o gösterilir, arkada sessizce tazelenir (sonraki ziyarette yeni gelir). Yazma işlemi (ekle/sil/pratik sonucu/giriş) olunca kopyalar atılır:
+// o zaman ilk okuma yine ağdan, yani kullanıcı kendi yaptığı değişikliği hep güncel görür.
+let ONB_SURUM = 0;
+const ONB = new Map(), ONB_YENILEME = new Map();
+function onbellekGecersiz() {
+  ONB_SURUM++; ONB.clear();
+  if (BEN) yerelYaz('liste:' + (BEN.ad || ''), null);   // soğuk açılışta eski liste gösterilmesin
+}
+function onbellekTazele(yol, yerelAnahtar, sessiz) {
+  const s0 = ONB_SURUM, k = s0 + yol;   // yazmadan önce başlamış istek yazmadan sonraki okumaya karışmasın
+  let y = ONB_YENILEME.get(k);
+  if (!y) {
+    y = istek(yol, { sessiz }).then((v) => { if (s0 === ONB_SURUM) { ONB.set(yol, { v, surum: s0 }); if (yerelAnahtar) yerelYaz(yerelAnahtar, v); } return v; }).finally(() => ONB_YENILEME.delete(k));
+    ONB_YENILEME.set(k, y);
+  }
+  return y;
+}
+async function okuHizli(yol, yerelAnahtar) {
+  const g = ONB.get(yol);
+  if (g && g.surum === ONB_SURUM) { onbellekTazele(yol, yerelAnahtar, true).catch(() => {}); return g.v; }
+  if (yerelAnahtar) {
+    const d = await yerelOku(yerelAnahtar);
+    if (d) { ONB.set(yol, { v: d, surum: ONB_SURUM }); onbellekTazele(yol, yerelAnahtar, true).catch(() => {}); return d; }
+  }
+  return onbellekTazele(yol, yerelAnahtar, false);
+}
 async function listeAl() {
-  try { const g = await istek('/kelimeler'); yerelYaz('liste:' + (BEN?.ad || ''), g); return g; }
-  catch (x) { if (!x.cevrimdisi) throw x; const g = await yerelOku('liste:' + (BEN?.ad || '')); if (g) { listeCevrimdisi = true; return g; } throw x; }
+  const anahtar = 'liste:' + (BEN?.ad || '');
+  try { return await okuHizli('/kelimeler', anahtar); }
+  catch (x) { if (!x.cevrimdisi) throw x; const g = await yerelOku(anahtar); if (g) { listeCevrimdisi = true; return g; } throw x; }
 }
 let listeCevrimdisi = false;
 
@@ -96,12 +126,20 @@ const dizin = () => DIZIN ? Promise.resolve(DIZIN) : (DIZIN_SOZ ||= (async () =>
     if (!r) { try { r = await (await fetch('/sozluk.json')).json(); } catch { r = null; } }
     if (r && Array.isArray(r.kelimeler) && r.kelimeler.length) {
       SIK = r.sik || []; DIZIN = r.kelimeler;
-      istek('/sozluk', { sessiz: true }).then((g) => { if (Array.isArray(g.kelimeler) && g.kelimeler.length > 1000) yerelYaz('sozluk', g); }).catch(() => {});
+      sozlukTazele();
       return DIZIN;
     }
   }
   const r = await istek('/sozluk'); SIK = r.sik || []; return (DIZIN = r.kelimeler);
 })());
+// sözlük güncellemesi (~1,2 MB): açılışta ilk ekranla yarışmasın diye 10 sn sonra, günde en fazla bir kez
+function sozlukTazele() {
+  setTimeout(async () => {
+    const son = +(await yerelOku('sozluk-zaman')) || 0;
+    if (Date.now() - son < 864e5) return;
+    istek('/sozluk', { sessiz: true }).then((g) => { if (Array.isArray(g.kelimeler) && g.kelimeler.length > 1000) { yerelYaz('sozluk', g); yerelYaz('sozluk-zaman', Date.now()); } }).catch(() => {});
+  }, 10000);
+}
 const SOZLUK_HAS = (w) => DIZIN?.some((x) => x.k === w.toLowerCase());
 const SEVIYELER = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const TURLER = ['isim', 'fiil', 'sıfat', 'zarf', 'phrasal verb', 'kalıp', 'deyim'];
@@ -158,8 +196,14 @@ async function yonlendir() {
   if (pratikDurum.aktif && !h.startsWith('#/pratik')) pratikDurum.aktif = false;
   klipTemizle(); klipTemizle = () => {};
   if (!BEN_BAKILDI) {
-    try { BEN = await istek('/ben', { sessiz: true }); if (BEN) yerelYaz('ben', BEN); }
-    catch (x) { BEN = x.cevrimdisi ? await yerelOku('ben') : null; }   // çevrimdışı açılışta son bilinen hesap (liste önbellekten gelir)
+    const kayitli = UYGULAMA ? await yerelOku('ben') : null;
+    if (kayitli) {   // uygulama: son bilinen hesapla hemen aç (ağ turunu bekleme), hesap arkada doğrulanır
+      BEN = kayitli;
+      istek('/ben', { sessiz: true }).then((b) => { if (b) { yerelYaz('ben', b); BEN = b; } }).catch((x) => { if (!x.cevrimdisi) { BEN = null; jetonYaz(''); yerelYaz('ben', null); yonlendir(); } });
+    } else {
+      try { BEN = await istek('/ben', { sessiz: true }); if (BEN) yerelYaz('ben', BEN); }
+      catch (x) { BEN = x.cevrimdisi ? await yerelOku('ben') : null; }   // çevrimdışı açılışta son bilinen hesap (liste önbellekten gelir)
+    }
     BEN_BAKILDI = true;
   }
   ustGeri(null);
@@ -236,6 +280,7 @@ function giris() {
     $('#ghata').textContent = '';
     try {
       BEN = await istek('/' + kip, { method: 'POST', govde: { ad: f.get('ad'), parola: f.get('parola') } });
+      yerelYaz('ben', BEN);
       let sonra = '#/'; try { sonra = sessionStorage.getItem('voca-sonra') || '#/'; sessionStorage.removeItem('voca-sonra'); } catch {}
       git(sonra);
     } catch (x) { $('#ghata').textContent = x.message; }
@@ -383,6 +428,20 @@ function satir(k) {
   </a>`;
 }
 
+// Yazım önerisi (H5b, Kağan 2026-10-25): yazılan kelimeye en yakın sözlük başlıkları. Düzenleme mesafesi (harf eksik/fazla/yanlış/yer değişmiş) eşiği kelime uzunluğuna göre:
+// 3-4 harf: 1 · 5-8 harf: 2 (5 harfli kelimede en az 3 harf uyar) · 9+: 3. Eşitlikte sık kullanılan, sonra alfabe.
+function yaziOnerisi(q, d, benim) {
+  const n = q.length, esik = n <= 4 ? 1 : n <= 8 ? 2 : 3;
+  const sikSira = new Map(SIK.map((k, i) => [k, i]));
+  const aday = [];
+  for (const x of d) {
+    if (x.k.includes(' ') || Math.abs(x.k.length - n) > esik) continue;
+    const m = mesafe(q, x.k);
+    if (m > 0 && m <= esik) aday.push({ k: x.k, m });
+  }
+  aday.sort((a, b) => a.m - b.m || (sikSira.get(a.k) ?? 1e9) - (sikSira.get(b.k) ?? 1e9) || a.k.localeCompare(b.k));
+  return aday.slice(0, 3);
+}
 // ——— sözlük listesi (Ara'da): arama + seviye/tür/durum filtresi aynı satırda ———
 const ARA_SIMGE = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>';
 async function sozlukListesi(kap, { odak = false, baslangic = '' } = {}) {
@@ -413,14 +472,18 @@ async function sozlukListesi(kap, { odak = false, baslangic = '' } = {}) {
     if (!q && !f.s && !f.t && !f.d && SIK.length) { // ilk ekran: sık kullanılan kelimelerden karışık seçki (her açılışta farklı)
       r = vitrin;
     } else if (q) r = r.filter((x) => x.k.includes(q) || x.tr.toLowerCase().includes(q)).sort((a, b) => (b.k.startsWith(q) - a.k.startsWith(q)) || a.k.localeCompare(b.k));
-    sonuc.innerHTML = r.length ? r.slice(0, 60).map((x) => {
+    if (q && !r.length) { const kokler = kokAdaylari(q).slice(1); r = d.filter((x) => kokler.includes(x.k) && (!f.s || x.s === f.s) && (!f.t || x.t.includes(f.t)) && (!f.d || (f.d === 'var') === benim.has(x.k))); }   // çekimli yazım (going → go, ran → run): kök kelimeyi göster
+    const oneri = q.length >= 3 ? yaziOnerisi(q, d, benim) : [];   // H5b: yazım hatası önerisi (yapay zeka yok, harf benzerliği)
+    const oneriHtml = oneri.length && (!r.length || (r.length < 3 && !d.some((x) => x.k === q)))
+      ? `<p class="oneri">Şunu mu demek istedin: ${oneri.map((x) => `<a href="#/k/${encodeURIComponent(x.k)}" data-oneri="${e(x.k)}">${e(x.k)}</a>`).join(', ')}</p>` : '';
+    sonuc.innerHTML = oneriHtml + (r.length ? r.slice(0, 60).map((x) => {
       const b = benim.get(x.k);
       return `<div class="satir sozluk-satir">
         <a href="#/k/${encodeURIComponent(x.k)}" class="satir-bag"><div class="k">${e(x.k)}</div><div class="t">${e(x.tr)}</div></a>
         <div class="sag">${x.s ? `<span class="seviye">${x.s}</span>` : ''}<span class="tur-k">${e(x.t.filter((t) => t !== 'deyim').join(' · '))}</span>
           ${b ? `<span class="durum ${durumSinif(b.durum)}">listende</span>` : `<button class="ekle-dugme" data-k="${e(x.k)}" aria-label="${e(x.k)} listeme ekle">+</button>`}</div>
       </div>`;
-    }).join('') : `<div class="bos"><p>Sözlükte yok${q ? `: <b>${e(q)}</b>` : ''}.${q && !f.s && !f.t && !f.d ? ` <a href="#/ekle" id="yineEkle">İnceleme iste →</a>` : ''}</p></div>`;
+    }).join('') : `<div class="bos"><p>Sözlükte yok${q ? `: <b>${e(q)}</b>` : ''}.${q && !f.s && !f.t && !f.d ? ` <a href="#/ekle" id="yineEkle">İnceleme iste →</a>` : ''}</p></div>`);
     $$('.ekle-dugme', sonuc).forEach((b) => b.onclick = async () => {
       if (!BEN) return girisGerekli();
       b.disabled = true;
@@ -554,7 +617,7 @@ const orinIsaret = (x) => false && x.orin?.length ? `<span class="orin" title="$
 async function ogren(ad) {
   yukleniyor();
   await dizin();
-  let { sozluk: s, benim: b, klipler = [] } = await istek('/kelime/' + encodeURIComponent(ad));
+  let { sozluk: s, benim: b, klipler = [] } = await okuHizli('/kelime/' + encodeURIComponent(ad));
   if (s && WEB_BASIT) { s = basitle(s); klipler = []; }
   if (!s) {
     ustGeri('#/liste', 'Kelimelerim');
@@ -667,7 +730,7 @@ async function ogren(ad) {
   });
   secimYaz();
   // etiketler: seçince kendiliğinden kaydolur
-  istek('/kelimeler').then((l) => {
+  listeAl().then((l) => {
     const secili = new Set(b.etiketler || []), tum = tumEtiketler(l.kelimeler);
     let z; etiketSecici($('#ogrenEt'), tum, secili, () => {
       clearTimeout(z); z = setTimeout(() => istek('/kelimeler/' + b.id, { method: 'PATCH', govde: { etiketler: [...secili] } }).then(() => bildir('Etiketler kaydedildi.')).catch((x) => bildir(x.message)), 500);
@@ -683,6 +746,7 @@ async function ogren(ad) {
 let listeFiltre = { q: '', g: 'tum', s: '', sr: 'yeni' };
 // Videodan kelime (Kağan, 2026-10-15): herhangi bir YouTube videosu + bizim altyazı + kelimeye dokun
 // Video keşfet akışı (v0): tam ekran dikey kaydırmalı kısa videolar
+let AKIS_SEKME = 'sizin';
 async function akisAc(baslangic) {
   await dizin();
   uyg.innerHTML = '<section class="sayfa-akis"></section>';
@@ -696,7 +760,19 @@ async function akisAc(baslangic) {
   }
   if (kendi.length && !location.hash.startsWith('#/video/ac') && !ilgiSorulduMu()) { const sec = ilgiSecenekleri(kendi); if (sec.length > 1) { const yeni = await ilgiSor(uyg.firstElementChild, sec); await akisSirayiHazirla(kendi, yeni); uyg.innerHTML = '<section class="sayfa-akis"></section>'; } }
   if (kendi.length) await akisSirayiHazirla(kendi);
-  klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, listeKelimeleri: async () => { if (!BEN) return null; try { return new Set((await listeAl()).kelimeler.map((k) => String(k.kelime).toLowerCase())); } catch { return null; } }, videolar: kendi, kullanici: () => BEN?.ad || '', baslangic: typeof baslangic === 'string' ? baslangic : '' }) : akisSayfasi(uyg.firstElementChild, ortak);
+  // Keşfet iki sekme: "Sizin için" ve "Takip" (listendeki kelimelerin geçtiği videolar)
+  let takipSet = null, takipSayi = 0;
+  if (kendi.length && BEN) { try { takipSet = new Set((await listeAl()).kelimeler.map((k) => String(k.kelime).toLowerCase())); takipSayi = takipVideolari(kendi, takipSet).length; } catch { takipSet = null; } }
+  const sekmeDegis = (yeni) => { AKIS_SEKME = yeni; yonlendir(); };
+  const belirli = typeof baslangic === 'string' && !!baslangic, sek = belirli ? 'sizin' : AKIS_SEKME;   // belirli videoya gidilirken sekme süzgeci uygulanmaz
+  if (kendi.length && sek === 'takip' && !takipSayi) {   // Takip boş: nedenini söyle
+    uyg.firstElementChild.innerHTML = `<div class="kv">${sekmeCubugu('takip', 0)}<div class="kv-bos-ekran"><h2>${!BEN ? 'Önce giriş yap' : takipSet && takipSet.size ? 'Henüz eşleşen video yok' : 'Listen boş'}</h2><p>${!BEN ? 'Takip, kelime listendeki kelimelerin geçtiği videoları toplar.' : takipSet && takipSet.size ? 'Listendeki kelimelerin geçtiği bir video bulunamadı. Havuza video eklendikçe burada görünür.' : 'Sözlükten kelime ekledikçe, o kelimelerin geçtiği videolar burada toplanır.'}</p>${!BEN ? '<button class="btn vurgu" id="takipGiris">Giriş yap</button>' : '<a class="btn vurgu" href="#/ara">Kelime ekle</a>'}</div></div>`;
+    document.body.classList.add('video-tam'); klipTemizle = () => document.body.classList.remove('video-tam');
+    sekmeBagla(uyg, sekmeDegis);
+    $('#takipGiris')?.addEventListener('click', girisGerekli);
+    return;
+  }
+  klipTemizle = kendi.length ? kendiAkis(uyg.firstElementChild, { ...ortak, sekme: sek, takipSayi, takipSet: sek === 'takip' ? takipSet : null, sekmeDegis, listeKelimeleri: async () => { if (!BEN) return null; try { return new Set((await listeAl()).kelimeler.map((k) => String(k.kelime).toLowerCase())); } catch { return null; } }, videolar: kendi, kullanici: () => BEN?.ad || '', baslangic: typeof baslangic === 'string' ? baslangic : '' }) : akisSayfasi(uyg.firstElementChild, ortak);
 }
 async function videoAc() {
   await dizin();
@@ -970,7 +1046,7 @@ async function pratik() {
     return;
   }
   yukleniyor();
-  const [l, g] = await Promise.all([istek('/kelimeler'), istek('/gecmis')]);
+  const [l, g] = await Promise.all([listeAl(), okuHizli('/gecmis')]);
   const kelimeler = l.kelimeler.filter((k) => k.durum !== 'bekliyor');
   const kayit = oturumOku();
   const zor = kelimeler.filter(zorMu);

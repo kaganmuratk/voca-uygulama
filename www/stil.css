@@ -1126,3 +1126,15 @@ body.video-tam main { padding: 0 !important; max-width: none; }
 /* sayfa yukarı çekilince (lastik/bounce) üstte beyazlık görünmesin: üst çubuğun rengi yukarı doğru uzar; aşağıda lastik etkisi kapalı */
 .ust::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 100vh; background: inherit; pointer-events: none; }
 html, body { overscroll-behavior-y: none; }
+
+/* Keşfet iki sekme: Sizin için / Takip (H5a) */
+.kv-sekme { position: absolute; top: calc(env(safe-area-inset-top) + 10px); left: 14px; z-index: 12; display: flex; gap: 14px; }
+.kv-sekme button { appearance: none; background: none; border: 0; padding: 6px 0; color: rgba(255,255,255,.62); font: inherit; font-size: 15px; font-weight: 600; text-shadow: 0 1px 6px rgba(0,0,0,.55); border-bottom: 2px solid transparent; cursor: pointer; }
+.kv-sekme button[aria-selected="true"] { color: #fff; border-bottom-color: #fff; }
+.kv-sekme i { font-style: normal; font-size: 11px; font-weight: 600; margin-left: 5px; padding: 1px 6px; border-radius: 999px; background: rgba(255,255,255,.22); vertical-align: 2px; }
+.kv-bos-ekran { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 0 32px; text-align: center; color: #fff; }
+.kv-bos-ekran h2 { font-size: 20px; margin: 0; }
+.kv-bos-ekran p { margin: 0; font-size: 14.5px; line-height: 1.5; color: rgba(255,255,255,.75); max-width: 300px; }
+
+.oneri { margin: 4px 0 12px; font-size: 14.5px; color: var(--m2); }
+.oneri a { color: var(--murekkep); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }

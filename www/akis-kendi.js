@@ -84,16 +84,26 @@ function tekSatir(satirlar, genislik, olc) {
   return sonuc;
 }
 
-export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: ham, kullanici, baslangic, listeKelimeleri }) {
+// İki sekme (H5a, Kağan 2026-10-25): "Sizin için" (genel keşfet) ve "Takip" (yalnız listendeki kelimelerin geçtiği videolar)
+export const sekmeCubugu = (aktif, takipSayi = 0) => `<div class="kv-sekme" role="tablist"><button type="button" role="tab" data-sekme="sizin" aria-selected="${aktif === 'sizin'}">Sizin için</button><button type="button" role="tab" data-sekme="takip" aria-selected="${aktif === 'takip'}">Takip${takipSayi ? `<i>${takipSayi}</i>` : ''}</button></div>`;
+export function sekmeBagla(kap, degis) { kap.querySelectorAll('[data-sekme]').forEach((b) => { b.onclick = () => { if (b.getAttribute('aria-selected') !== 'true') degis(b.dataset.sekme); }; }); }
+export function takipVideolari(liste, set) {   // listendeki kelimeleri içeren videolar, çok eşleşen önde (eşitlikte kişisel sıra korunur)
+  const say = new Map(liste.map((v) => [v.id, KS.eslesenler(v, set).length]));
+  return liste.filter((v) => say.get(v.id) > 0).sort((a, b) => say.get(b.id) - say.get(a.id));
+}
+export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: ham, kullanici, baslangic, listeKelimeleri, sekme = 'sizin', takipSayi = 0, takipSet = null, sekmeDegis = () => {} }) {
   kap.innerHTML = `
     <div class="kv">
+      ${sekmeCubugu(sekme, takipSayi)}
       <a class="kv-link" href="#/video/link">Bağlantıyla aç</a>
       <div class="kv-liste" tabindex="-1"></div>
     </div>`;
   document.body.classList.add('video-tam');
   const liste = kap.querySelector('.kv-liste');
+  sekmeBagla(kap, sekmeDegis);
   let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = sirala(ham));
-  if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; DEPO.sira = videolar; }
+  if (takipSet) videolar = takipVideolari(videolar, takipSet);   // Takip sekmesi: tam sıra (DEPO.sira) bozulmaz, yalnız bu görünüm süzülür
+  if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; if (!takipSet) DEPO.sira = videolar; }
   let hiz = hizOku(), basili = false, basiliSon = 0, otoEngelli = false, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, kayitli = new Set();
   const altyaziOnbellek = new Map();
   liste.style.setProperty('--ust', String(ayOku()));

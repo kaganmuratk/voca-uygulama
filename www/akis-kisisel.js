@@ -2,6 +2,7 @@
 // akış sırası açılışta bu ağırlıklar + listendeki kelimelerin videoda geçmesi + görülmemişlik ile kurulur. Aynı kanal art arda yok, aynı türden en çok 2 art arda, ~%20 keşif.
 import { yerelOku, yerelYaz } from './yerel.js';
 import { profilPlanla } from './profil-senkron.js';
+import { kokAdaylari } from './kok.js';
 
 const ANAHTAR = 'akis-sinyal';
 const HAFTA = 7 * 24 * 3600 * 1000;
@@ -38,7 +39,7 @@ export async function listeKelimeleri() {
     const l = await yerelOku('liste:' + b.ad); return new Set(((l && l.kelimeler) || []).map((k) => String(k.kelime).toLowerCase()));
   } catch { return new Set(); }
 }
-const adaylar = (w) => [w, w.replace(/ies$/, 'y'), w.replace(/ied$/, 'y'), w.replace(/es$/, ''), w.replace(/s$/, ''), w.replace(/ed$/, ''), w.replace(/d$/, ''), w.replace(/ing$/, ''), w.replace(/ing$/, 'e'), w.replace(/ly$/, '')];
+const adaylar = kokAdaylari;
 export function eslesenler(v, set) {   // videodaki (sz) kelimelerden listede olanlar
   if (!set || !set.size || !v.sz) return [];
   const o = []; for (const w of v.sz) { const k = adaylar(w).find((a) => a.length >= 3 && set.has(a)); if (k && !o.includes(k)) o.push(k); }

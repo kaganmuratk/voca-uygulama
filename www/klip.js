@@ -1,6 +1,7 @@
 // Kelime klipleri: YouTube'un resmî gömülü oynatıcısı (kendi altyazısı ve düğmeleri kapalı) + bizim altyazımız.
 // Klip = kelimenin geçtiği cümle (+ kısa bağlam). Cümle bitince durur. Altyazıdaki kelimeye dokununca kısa anlam çıkar.
 import { bicimRegex } from './bicim.js';
+import { kokAdaylari } from './kok.js';
 import { PAKET } from './ortam.js';
 import { KopruOyuncu } from './yt-koprusu.js';
 
@@ -59,7 +60,7 @@ export function kokBul(t, dizin) {
   const w = t.toLowerCase().replace(/[’']s$/, '').replace(/[^a-z-]/g, '');
   if (!w) return null;
   const var_ = (x) => dizin.find((d) => d.k === x);
-  for (const a of [w, w.replace(/ies$/, 'y'), w.replace(/ied$/, 'y'), w.replace(/es$/, ''), w.replace(/s$/, ''), w.replace(/ed$/, ''), w.replace(/d$/, ''), w.replace(/ing$/, ''), w.replace(/ing$/, 'e'), w.replace(/ses$/, 'sis')]) {
+  for (const a of kokAdaylari(w)) {   // düzensiz (went → go) ve ünsüz ikizlenmesi (running → run) dahil
     const d = var_(a); if (d) return d;
   }
   return null;
