@@ -31,6 +31,7 @@ export async function apiIstek(yol, { method = 'GET', govde } = {}) {
 // Sunucudaki herkese açık JSON dosyası (akış listesi, altyazı vb.): uygulamada Capacitor yerel HTTP (CORS yok), sitede fetch. Başarısızsa null.
 export async function jsonAl(yol) {
   try {
+    if (PAKET && yol === '/akis-kendi.json') { const y = await fetch(yol).then((r) => (r.ok ? r.json() : null)).catch(() => null); if (Array.isArray(y) && y.length) return y; }   // uygulamada video listesi pakettekidir (videolar da gömülü); canlı site eski listeyi tutabilir
     if (!PAKET) { const r = await fetch(yol, { cache: 'no-cache' }); return r.ok ? await r.json() : null; }
     const H = window.Capacitor?.Plugins?.CapacitorHttp; if (!H) return null;
     const r = await H.get({ url: SITE + yol, headers: { 'X-Voca-App': '1' }, responseType: 'json' });
