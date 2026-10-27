@@ -317,7 +317,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (bn !== sayac || !el.paused || kullaniciDurdu || el.dataset.kullanici === String(bn) || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
       el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(1); }, 250);
     }, 2500);
-    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); olcAl('ilk'); olcGoster(i); setTimeout(() => { if (bn === sayac) olcGoster(i); }, 700); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor'); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
+    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); olcAl('ilk'); olcGoster(i); setTimeout(() => { if (bn === sayac) olcGoster(i); }, 700); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor', 'goster'); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
     if (!el.paused && el.readyState >= 3) oynadi(); else el.addEventListener('playing', oynadi);
   }
   // Listendeki bir kelime bu videoda geçiyorsa kısa, abartısız ipucu (Kağan 2026-10-19): "evidence kelimen bu videoda geçiyor"
@@ -342,7 +342,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (dongu >= 1) KS.olay(ov, 'tekrar');
     }
     izSn = 0; dongu = 0; oncekiT = 0;
-    if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } setTimeout(() => { if (vid(aktif) !== o) { try { o.currentTime = 0; } catch { /* yok */ } } }, 450); } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
+    if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } setTimeout(() => { if (vid(aktif) !== o) { try { o.currentTime = 0; } catch { /* yok */ } kart(onceki)?.classList.remove('goster'); } }, 450); } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
     clearInterval(izleyici); sozlukKapat(); liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; basili = false; satirlar = []; sira = -1; kullaniciDurdu = false;
     aktif = i; const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
     if (!k || !el) return;

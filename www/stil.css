@@ -975,7 +975,8 @@ body:not(.uygulama) .listede, .sesler:empty { display: none; }
 .kv-kart { width: 100%; min-width: 0; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; }
 .kv-sahne { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; }
 .kv-kapak { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; -webkit-user-drag: none; }
-.kv-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: transparent; display: block; }
+.kv-vid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: transparent; display: block; opacity: 0; }   /* kapak (.kv-kapak) görünür; video yalnız oynarken/durdurulmuşken görünür: arkada hazırlanan videonun ilerleyip başa atlaması hiç görünmez */
+.kv-kart.goster .kv-vid, .kv-kart.durdu .kv-vid { opacity: 1; }
 .kv-sahne::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 42%; background: linear-gradient(to top, rgba(0,0,0,.6), rgba(0,0,0,0)); pointer-events: none; z-index: 2; }
 .kv-tap { position: absolute; inset: 0; z-index: 3; }
 .kv-link { position: absolute; top: calc(env(safe-area-inset-top) + 10px); right: 14px; z-index: 12; padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.38); color: #fff; font-size: 12.5px; text-decoration: none; backdrop-filter: blur(8px); }
