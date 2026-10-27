@@ -150,7 +150,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   };
   for (const ad of Object.keys(OLAY_KISA)) liste.addEventListener(ad, (ev) => { if (ev.target === vid(aktif)) olayYaz(ad, ev.target.currentTime); }, true);
   const olcAl = (ad) => { if (olc && olc.bn === sayac && olc[ad] === undefined) olc[ad] = Math.round(performance.now() - gecisT0); };
-  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
+  const kapakTani = (i) => {   // tanı: kapak resmi yüklendi mi, yüklenmediyse neden (sunucu kapağı telefonda "?" gösteriyordu)
+    const im = kart(i)?.querySelector('.kv-kapak'); if (!im) return '';
+    const d = !im.complete ? 'bekler' : im.naturalWidth ? 'ok' : 'HATA ' + (im.dataset.neden || '');
+    if (im.complete && !im.naturalWidth && !im.dataset.neden) { im.dataset.neden = '…'; fetch(im.src).then((x) => { im.dataset.neden = 'http' + x.status; }).catch((h) => { im.dataset.neden = String((h && h.message) || h).slice(0, 30); }); setTimeout(() => olcGoster(i), 800); }
+    return ' · kapak ' + d + (im.src.startsWith('http') ? ' (sunucu)' : ' (paket)');
+  };
+  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
   const durum = (i, m) => {
     const el = kart(i)?.querySelector('.kv-durum'); if (!el) return;
     el.textContent = m || ''; el.hidden = !m;
@@ -170,7 +176,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   liste.innerHTML = videolar.map((v) => `
     <article class="kv-kart" data-id="${v.id}">
       <div class="kv-sahne">
-        <img class="kv-kapak" src="${e(v.kapak)}" alt="" decoding="async" draggable="false">
+        <img class="kv-kapak" src="${e(gomulu(v) ? v.kapak : mutlak(v.kapak))}" alt="" decoding="async" draggable="false">
         <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture></video>
         <div class="kv-tani" aria-hidden="true"></div>
         <div class="kv-tap"></div>
@@ -293,7 +299,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     return o;
   }
   if (VV) {
-    VV.addListener('ilkKare', () => { nativEl?.hazir(); });
+    VV.addListener('ilkKare', () => { nativEl?.hazir(); setTimeout(() => VV.tani().then((x) => { if (olc) { olc.tn = `ses: ${x.muted ? 'SESSİZ' : 'açık'} v${x.vol} iz${x.izler} ${x.kategori} çıkış${(x.cikti * 100) | 0}% ${x.rota}${x.diger ? ' diğerçalıyor' : ''}`; olcGoster(aktif); } }).catch(() => {}), 700); });
     VV.addListener('zaman', (e) => { nativEl?.zaman(e.t, e.d); });
   }
   const nativKonum = () => { const r = liste.parentElement.getBoundingClientRect(); VV.ac({ x: r.left, y: r.top, w: r.width, h: r.height }).catch(() => {}); };

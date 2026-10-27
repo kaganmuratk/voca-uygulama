@@ -21,7 +21,8 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "hizAyarla", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "onceden", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "durdur", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "onbellekListesi", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "onbellekListesi", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "tani", returnType: CAPPluginReturnPromise)
     ]
 
     private let player = AVPlayer()
@@ -126,6 +127,23 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             return da > db
         }
         for u in sirali.dropFirst(onbellekSiniri) { try? fm.removeItem(at: u) }
+    }
+
+    // tanı: ses neden gelmiyor? (sessiz bayrağı, ses seviyesi, videoda ses izi, oturum kategorisi, çıkış yolu)
+    @objc func tani(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let s = AVAudioSession.sharedInstance()
+            let izler = self.player.currentItem?.asset.tracks(withMediaType: .audio).count ?? -1
+            call.resolve([
+                "muted": self.player.isMuted,
+                "vol": Double(self.player.volume),
+                "izler": izler,
+                "kategori": s.category.rawValue.replacingOccurrences(of: "AVAudioSessionCategory", with: ""),
+                "cikti": Double(s.outputVolume),
+                "rota": s.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","),
+                "diger": s.isOtherAudioPlaying
+            ])
+        }
     }
 
     @objc func onbellekListesi(_ call: CAPPluginCall) {

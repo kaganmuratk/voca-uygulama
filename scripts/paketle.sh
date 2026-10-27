@@ -14,7 +14,7 @@ d = json.load(open('www/akis-kendi.json')); d = d if isinstance(d, list) else d.
 ids = {v['id'] for v in d[:int(os.environ.get('GOMULU_SAYI', '2'))]}   # varsayılan: ilk 2 video gömülü (ilk açılış), kalanı sunucudan akar (manifestte sunucu:true)
 for k in ('akis-video', 'akis-altyazi'):
     for f in os.listdir('www/' + k):
-        if f.split('.')[0] not in ids and not f.endswith('.jpg'): os.remove(f'www/{k}/{f}')   # kapaklar (küçük) hepsi gömülü: sunucu kapağı telefonda yüklenmiyordu
+        if f.split('.')[0] not in ids: os.remove(f'www/{k}/{f}')
 for v in d: v['sunucu'] = v['id'] not in ids   # pakette olmayanlar sunucudan (yerel oynatıcı http adresiyle açar, kapak da sunucudan)
 json.dump(d, open('www/akis-kendi.json', 'w'), ensure_ascii=False)
 PY
