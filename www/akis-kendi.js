@@ -11,7 +11,7 @@ import { profilPlanla } from './profil-senkron.js';
 export const ilgiSorulduMu = KS.ilgiSorulduMu, ilgiSecenekleri = KS.ilgiSecenekleri, ilgiSor = KS.ilgiSor;
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const mutlak = (y) => (PAKET ? SITE + y : y);
+const mutlak = (y) => (PAKET && !/^https?:/.test(y) ? SITE + y : y);   // medya R2'de (https://medya…): tam adres olduğu gibi kalır
 // Yerel video oynatıcı (iPhone'un kendi AVPlayer'ı, web görünümünün altında): Düşük Güç Modu/otomatik başlatma kısıtı yok. Eklenti yoksa ya da localStorage 'voca-native' = '0' ise eski <video> yolu.
 let VV_TANI = '';   // yerel oynatıcı neden devrede değil (ekranda tanı satırında görünür)
 const VV = (() => {
