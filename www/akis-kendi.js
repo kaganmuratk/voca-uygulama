@@ -154,13 +154,14 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const im = kart(i)?.querySelector('.kv-kapak'); if (!im) return '';
     const d = !im.complete ? 'bekler' : im.naturalWidth ? 'ok' : 'HATA ' + (im.dataset.neden || '');
     if (im.complete && !im.naturalWidth && !im.dataset.neden) { im.dataset.neden = '…'; fetch(im.src).then((x) => { im.dataset.neden = 'http' + x.status; }).catch((h) => { im.dataset.neden = String((h && h.message) || h).slice(0, 30); }); setTimeout(() => olcGoster(i), 800); }
-    return ' · kapak ' + d + (im.src.startsWith('http') ? ' (sunucu)' : ' (paket)') + (im.dataset.blob ? ' blob:' + im.dataset.blob : '');
+    return ' · kapak ' + d + (im.src.startsWith('http') ? ' (sunucu)' : ' (paket)') + (im.dataset.blob ? ' blob:' + im.dataset.blob : '') + (im.dataset.bmp ? ' bmp:' + im.dataset.bmp : '') + (im.dataset.dec ? ' dec:' + im.dataset.dec : '') + ' ' + im.src.slice(0, 40);
   };
   // Telefonun web görünümü sunucudan gelen kapak <img>'ini çizemiyor (dosya 200 iniyor, ölçüldü 2026-10-27): hata olursa fetch ile indirip blob adresiyle göster
   liste.addEventListener('error', (ev) => {
     const im = ev.target; if (!(im instanceof HTMLImageElement) || !im.classList.contains('kv-kapak') || im.dataset.blob || !im.src.startsWith('http')) return;
     im.dataset.blob = 'bekler';
-    fetch(im.src).then((x) => (x.ok ? x.blob() : Promise.reject(new Error('http' + x.status)))).then((b) => { im.onload = () => { im.dataset.blob = 'ok'; }; im.src = URL.createObjectURL(b); }).catch((h) => { im.dataset.blob = 'HATA ' + String((h && h.message) || h).slice(0, 20); });
+    im.decode().then(() => { im.dataset.dec = 'ok'; }).catch((h) => { im.dataset.dec = String((h && (h.name + ' ' + h.message)) || h).slice(0, 40); });
+    fetch(im.src).then((x) => (x.ok ? x.blob() : Promise.reject(new Error('http' + x.status)))).then((b) => { createImageBitmap(b).then((bm) => { im.dataset.bmp = bm.width + 'x' + bm.height + '/' + b.size; }).catch((h) => { im.dataset.bmp = 'HATA ' + String((h && h.message) || h).slice(0, 30); }); im.onload = () => { im.dataset.blob = 'ok'; }; im.src = URL.createObjectURL(b); }).catch((h) => { im.dataset.blob = 'HATA ' + String((h && h.message) || h).slice(0, 20); });
   }, true);
   const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
   const durum = (i, m) => {
