@@ -31,6 +31,7 @@ function sirala(liste) {
   }
   return sonuc;
 }
+// Kapak: uygulamada pakettekini kullan (sunucudan beklemek siyah ekran demek); sitede sunucudan. Videolar yalnız sunucuda tutulmaya başlayınca burası da mutlak adrese döner.
 const TANI = new Map();   // video kimliği → son indirme denemesinin kısa özeti (ekranda hata nedenini göstermek için)
 const videoMu = (buf) => buf.byteLength > 2000 && new TextDecoder().decode(new Uint8Array(buf, 4, 4)) === 'ftyp';   // MP4 dosyası 4. bayttan 'ftyp' ile başlar
 async function indir(v, bitti) {
@@ -129,7 +130,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   liste.innerHTML = videolar.map((v) => `
     <article class="kv-kart" data-id="${v.id}">
       <div class="kv-sahne">
-        <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture poster="${e(mutlak(v.kapak))}"></video>
+        <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture poster="${e(PAKET ? v.kapak : mutlak(v.kapak))}"></video>
         <div class="kv-tap"></div>
         <div class="kv-oyna" hidden aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></div>
         <div class="kv-bekle"><i></i></div>
