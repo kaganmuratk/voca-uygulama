@@ -29,6 +29,10 @@ const VV = (() => {
     VV_TANI = 'registerPlugin-yok, Plugins:[' + Object.keys(C.Plugins || {}).join(',') + ']'; return null;
   } catch (h) { VV_TANI = 'hata ' + String((h && h.message) || h).slice(0, 40); return null; }
 })();
+// Telefona önceden inmiş videolar (yerel oynatıcının disk önbelleği): yeni açılışta ilk video bunlardan olur, internet beklemez; sıra yine karışık kalır (önbellektekiler kendi içinde sıralı).
+const ONB = new Set();
+const onbHazir = VV ? VV.onbellekListesi().then((r) => { (r.ids || []).forEach((k) => ONB.add(k)); }).catch(() => {}) : Promise.resolve();
+const onbOnce = (l) => (ONB.size ? [...l.filter((v) => ONB.has(v.id)), ...l.filter((v) => !ONB.has(v.id))] : l);
 const gomulu = (v) => PAKET && !!v && !v.sunucu;   // uygulama paketine gömülü video (deneme havuzu); manifestte `sunucu: true` olan videolar sunucudan gelir (sitedeki gibi: tam indir, blob olarak ver, kalıcı önbelleğe yaz)
 const AY_ANAHTAR = 'voca-altyazi-ust';   // altyazının üstten konumu (sahne yüksekliğinin oranı; varsayılan 0,5 = ekranın ortası)
 const ayOku = () => { try { const v = parseFloat(localStorage.getItem(AY_ANAHTAR)); return Number.isFinite(v) ? Math.min(0.88, Math.max(0.1, v)) : 0.5; } catch { return 0.5; } };
@@ -87,12 +91,12 @@ async function isci(bitti) {   // tek işçi: o an gereken en öncelikli videoyu
 // Uygulama açılışında çağrılır: liste alınır, sıra belirlenir, ilk 2 video indirilmeye başlar (Video sekmesi açılınca hazır olsun).
 export async function akisOnYukle() {
   try {
-    if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }
+    if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; await onbHazir; DEPO.sira = onbOnce(await KS.sirala(l).catch(() => sirala(l))); }
     DEPO.hedefler = () => DEPO.sira.slice(0, 2);
     await isci();   // gömülü videolar doğrudan açılır (isci onları atlar); sunucudaki videolar önden inip kalıcı önbelleğe yazılır
   } catch { /* ısınma isteğe bağlı */ }
 }
-export async function akisSirayiHazirla(l, zorla) { if (zorla || !DEPO.sira || DEPO.sira.length !== l.length) DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }   // kişisel sıra (sinyal + listendeki kelimeler); uygulama açılışında zaten hazırsa yeniden kurulmaz
+export async function akisSirayiHazirla(l, zorla) { if (zorla || !DEPO.sira || DEPO.sira.length !== l.length) { await onbHazir; DEPO.sira = onbOnce(await KS.sirala(l).catch(() => sirala(l))); } }   // kişisel sıra (sinyal + listendeki kelimeler); uygulama açılışında zaten hazırsa yeniden kurulmaz
 const KAYIT = (ad) => 'kayit:' + (ad || '');
 export async function kayitlariOku(ad) { const l = await yerelOku(KAYIT(ad)); return Array.isArray(l) ? l : []; }
 
@@ -128,7 +132,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   document.body.classList.add('video-tam');
   const liste = kap.querySelector('.kv-liste');
   sekmeBagla(kap, sekmeDegis);
-  let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = sirala(ham));
+  let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = onbOnce(sirala(ham)));
   if (takipSet) videolar = takipVideolari(videolar, takipSet);   // Takip sekmesi: tam sıra (DEPO.sira) bozulmaz, yalnız bu görünüm süzülür
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; if (!takipSet) DEPO.sira = videolar; }
   let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, olc = null, kayitli = new Set();
@@ -225,7 +229,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   }
   const nativSrc = (v) => (gomulu(v) ? v.mp4 : mutlak(v.mp4));
   function komsulariHazirla(i) {
-    if (VV) { if (videolar[i + 1]) VV.onceden({ src: nativSrc(videolar[i + 1]) }).catch(() => {}); for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) altyaziAl(videolar[n].id); return; }   // yerel oynatıcı: yalnız sıradaki video önden hazırlanır (indirme/blob yok)
+    if (VV) { for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) { VV.onceden({ src: nativSrc(videolar[n]) }).catch(() => {}); altyaziAl(videolar[n].id); } return; }   // yerel oynatıcı: sıradaki 3 video önden hazırlanır; sunucudakiler telefona kalıcı iner (disk önbelleği, sonraki açılışta hazır)
     DEPO.hedefler = () => [videolar[i], videolar[i + 1], videolar[i + 2], videolar[i + 3], videolar[i - 1]];
     for (let j = i; j <= i + 1; j++) { if (!videolar[j]) continue; if (gomulu(videolar[j])) kaynakVer(j, true); else if (DEPO.blob.has(videolar[j].id)) kaynakVer(j); }   // gömülü: paket içi doğrudan adres (bulunamazsa hata yedeği sunucuya geçer); sunucudaki: inmişse blob
     sakla(i);

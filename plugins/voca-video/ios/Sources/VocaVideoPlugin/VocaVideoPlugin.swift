@@ -20,7 +20,8 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "sesAyarla", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "hizAyarla", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "onceden", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "durdur", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "durdur", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "onbellekListesi", returnType: CAPPluginReturnPromise)
     ]
 
     private let player = AVPlayer()
@@ -76,10 +77,60 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     // yol çözümü: http(s) adresi olduğu gibi, "/akis-video/x.mp4" gibi yollar uygulama paketindeki public klasöründen
     private func adres(_ s: String) -> URL? {
-        if s.hasPrefix("http://") || s.hasPrefix("https://") { return URL(string: s) }
+        if s.hasPrefix("http://") || s.hasPrefix("https://") { return yerelKopya(s) ?? URL(string: s) }
         let yol = s.hasPrefix("/") ? String(s.dropFirst()) : s
         let u = Bundle.main.bundleURL.appendingPathComponent("public").appendingPathComponent(yol)
         return FileManager.default.fileExists(atPath: u.path) ? u : nil
+    }
+
+    // kalıcı disk önbelleği: sunucudaki videolar sıradakiler önden telefona iner (Caches/voca-video/<kimlik>.mp4); sonraki açılışta ilk video internetsiz hazırdır. En çok 12 dosya tutulur.
+    private let onbellekSiniri = 12
+    private var indirilenler = Set<String>()
+    private lazy var onbellekKlasoru: URL = {
+        let u = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("voca-video")
+        try? FileManager.default.createDirectory(at: u, withIntermediateDirectories: true)
+        return u
+    }()
+
+    private func kimlik(_ s: String) -> String? {
+        guard let u = URL(string: s) else { return nil }
+        let k = u.deletingPathExtension().lastPathComponent
+        return k.isEmpty ? nil : k
+    }
+
+    private func yerelKopya(_ s: String) -> URL? {
+        guard let k = kimlik(s) else { return nil }
+        let u = onbellekKlasoru.appendingPathComponent(k + ".mp4")
+        return FileManager.default.fileExists(atPath: u.path) ? u : nil
+    }
+
+    private func diskeIndir(_ s: String) {
+        guard let k = kimlik(s), let u = URL(string: s), yerelKopya(s) == nil, !indirilenler.contains(k) else { return }
+        indirilenler.insert(k)
+        let hedef = onbellekKlasoru.appendingPathComponent(k + ".mp4")
+        URLSession.shared.downloadTask(with: u) { [weak self] tmp, yanit, _ in
+            if let tmp = tmp, (yanit as? HTTPURLResponse)?.statusCode == 200 {
+                try? FileManager.default.removeItem(at: hedef)
+                try? FileManager.default.moveItem(at: tmp, to: hedef)
+            }
+            DispatchQueue.main.async { self?.indirilenler.remove(k); self?.onbellekTemizle() }
+        }.resume()
+    }
+
+    private func onbellekTemizle() {
+        let fm = FileManager.default
+        guard let l = try? fm.contentsOfDirectory(at: onbellekKlasoru, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let sirali = l.sorted { (a, b) in
+            let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return da > db
+        }
+        for u in sirali.dropFirst(onbellekSiniri) { try? fm.removeItem(at: u) }
+    }
+
+    @objc func onbellekListesi(_ call: CAPPluginCall) {
+        let l = (try? FileManager.default.contentsOfDirectory(at: onbellekKlasoru, includingPropertiesForKeys: nil)) ?? []
+        call.resolve(["ids": l.filter { $0.pathExtension == "mp4" }.map { $0.deletingPathExtension().lastPathComponent }])
     }
 
     private func item(_ s: String) -> AVPlayerItem? {
@@ -191,6 +242,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func onceden(_ call: CAPPluginCall) {
         guard let src = call.getString("src") else { call.resolve(); return }
         DispatchQueue.main.async {
+            if src.hasPrefix("http") { self.diskeIndir(src) }
             if self.onbellek[src] == nil, let u = self.adres(src) {
                 let it = AVPlayerItem(asset: AVURLAsset(url: u))
                 it.preferredForwardBufferDuration = 4
