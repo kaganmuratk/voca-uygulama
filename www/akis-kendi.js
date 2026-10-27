@@ -342,7 +342,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (dongu >= 1) KS.olay(ov, 'tekrar');
     }
     izSn = 0; dongu = 0; oncekiT = 0;
-    if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
+    if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } setTimeout(() => { if (vid(aktif) !== o) { try { o.currentTime = 0; } catch { /* yok */ } } }, 450); } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
     clearInterval(izleyici); sozlukKapat(); liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; basili = false; satirlar = []; sira = -1; kullaniciDurdu = false;
     aktif = i; const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
     if (!k || !el) return;
