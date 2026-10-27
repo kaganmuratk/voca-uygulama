@@ -11,10 +11,12 @@ rsync -a --exclude 'ses/' --exclude 'sw.js' --exclude 'oynatici*.html' --exclude
 python3 - <<'PY'
 import json, os
 d = json.load(open('www/akis-kendi.json')); d = d if isinstance(d, list) else d.get('videolar', [])
-ids = {v['id'] for v in d[:8]}   # yalnız ilk 8 gömülü; kalanlar sunucudan
+ids = {v['id'] for v in d[:int(os.environ.get('GOMULU_SAYI', '2'))]}   # varsayılan: ilk 2 video gömülü (ilk açılış), kalanı sunucudan akar (manifestte sunucu:true)
 for k in ('akis-video', 'akis-altyazi'):
     for f in os.listdir('www/' + k):
         if f.split('.')[0] not in ids: os.remove(f'www/{k}/{f}')
+for v in d: v['sunucu'] = v['id'] not in ids   # pakette olmayanlar sunucudan (yerel oynatıcı http adresiyle açar, kapak da sunucudan)
+json.dump(d, open('www/akis-kendi.json', 'w'), ensure_ascii=False)
 PY
 # sözlük: canlı sunucudan (derleme anındaki sürüm); başarısız olursa önceki kopya kullanılır
 if curl -sf --max-time 60 -H 'X-Voca-App: 1' https://voca.revelalabs.com.tr/api/sozluk -o www/sozluk.json.tmp && [ "$(wc -c < www/sozluk.json.tmp)" -gt 500000 ]; then mv www/sozluk.json.tmp www/sozluk.json; cp www/sozluk.json sozluk.son.json; else rm -f www/sozluk.json.tmp; [ -f sozluk.son.json ] && cp sozluk.son.json www/sozluk.json; fi
