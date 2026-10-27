@@ -31,19 +31,21 @@ function sirala(liste) {
   }
   return sonuc;
 }
+const TANI = new Map();   // video kimliği → son indirme denemesinin kısa özeti (ekranda hata nedenini göstermek için)
 const videoMu = (buf) => buf.byteLength > 2000 && new TextDecoder().decode(new Uint8Array(buf, 4, 4)) === 'ftyp';   // MP4 dosyası 4. bayttan 'ftyp' ile başlar
 async function indir(v, bitti) {
   if (DEPO.blob.has(v.id) || DEPO.indiriliyor.has(v.id) || (DEPO.hata.get(v.id) || 0) >= 2) return;
   DEPO.indiriliyor.add(v.id);
   try {
     let buf = null;
-    let r = PAKET ? await fetch(v.mp4).catch(() => null) : null;   // uygulamada pilot videolar pakette gömülü (anında); yoksa kalıcı önbellek, o da yoksa sunucu
-    if (r && r.ok) { const b = await r.arrayBuffer().catch(() => null); if (b && videoMu(b)) buf = b; }   // içerik türü başlığına güvenme (iOS yerel şema bunu vermeyebilir): dosyanın kendisine bak
+    let r = PAKET ? await fetch(v.mp4).catch((h) => { TANI.set(v.id, 'P!' + String((h && h.message) || h).slice(0, 30)); return null; }) : null;   // uygulamada pilot videolar pakette gömülü (anında); yoksa kalıcı önbellek, o da yoksa sunucu
+    if (r) { const b = r.ok ? await r.arrayBuffer().catch(() => null) : null; TANI.set(v.id, `P${r.status} ${(r.headers.get('content-type') || '-').slice(0, 12)} ${b ? b.byteLength : 0}`); if (b && videoMu(b)) buf = b; }   // içerik türü başlığına güvenme (iOS yerel şema bunu vermeyebilir): dosyanın kendisine bak
     if (!buf) {
       buf = await depodanOku(v.id);
       if (buf && !videoMu(buf)) buf = null;   // önceki hatalı kurulumdan kalan HTML'i video sayma
       if (!buf) {
         r = await fetch(mutlak(v.mp4));
+        TANI.set(v.id, (TANI.get(v.id) || '') + ' S' + r.status + ' ' + (r.headers.get('content-type') || '-').slice(0, 10));
         if (!r.ok) throw new Error('http ' + r.status);
         buf = await r.arrayBuffer();
         if (!videoMu(buf)) throw new Error('video değil');   // sunucu bulamayınca HTML döndürüyor; onu video diye saklama
@@ -330,10 +332,10 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       oynat(i);
     } else {
       setTimeout(() => { if (bn === sayac && !k.classList.contains('oynuyor') && !k.classList.contains('durdu')) k.classList.add('yukleniyor'); }, 600);   // spinner yalnız 0,6 sn'den uzun beklemede (kısa beklemede titreme yapmasın); indirme bitince kaynakVer → oynat
-      setTimeout(() => {   // 7 sn'de inmediyse doğrudan adresten dene (yedek)
+      setTimeout(() => {   // inmediyse doğrudan adresten dene (yedek): uygulamada önce paketteki dosya (iOS medya için aralık isteğini kendisi karşılar), olmazsa sunucu
         if (bn !== sayac || el.dataset.kaynak) return;
-        el.dataset.kaynak = '1'; el.preload = 'auto'; el.muted = true; el.src = mutlak(v.mp4); el.load(); oynat(i);
-      }, 7000);
+        el.dataset.kaynak = '1'; el.preload = 'auto'; el.muted = true; if (PAKET) el.dataset.dogrudan = '1'; el.src = PAKET ? v.mp4 : mutlak(v.mp4); el.load(); oynat(i);
+      }, PAKET ? 2500 : 7000);
     }
     izleyici = setInterval(tik, 50);
     ipucuGoster(i, v, bn);
@@ -344,7 +346,10 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   liste.querySelectorAll('video').forEach((el, i) => {
     el.addEventListener('waiting', () => { if (i === aktif) { const k = kart(i); setTimeout(() => { if (i === aktif && vid(i) === el && el.readyState < 3) k.classList.add('yukleniyor'); }, 350); } });
     el.addEventListener('playing', () => { kart(i).classList.remove('yukleniyor'); });
-    el.addEventListener('error', () => { if (i === aktif && el.dataset.kaynak && el.src) { durum(i, 'Video yüklenemedi, sonrakine geçiliyor…'); setTimeout(() => { if (i === aktif) kart(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 1500); } });
+    el.addEventListener('error', () => {
+      if (i === aktif && el.dataset.dogrudan === '1') { el.dataset.dogrudan = '2'; el.dataset.dogrudanHata = 'D' + (el.error?.code ?? '?'); el.src = mutlak(videolar[i].mp4); el.load(); el.play().catch(() => {}); return; }   // paket içi adres olmadı: sunucudan dene
+      if (i === aktif && el.dataset.kaynak && el.src) { durum(i, `Video yüklenemedi (${[TANI.get(videolar[i]?.id), el.dataset.dogrudanHata, 'k' + (el.error?.code ?? '?')].filter(Boolean).join(' ')}), sonrakine geçiliyor…`); setTimeout(() => { if (i === aktif) kart(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 4000); }   // 4 sn: Kağan hata kodunu okuyabilsin
+    });
   });
 
   gozlemci = new IntersectionObserver((kayitlar) => {

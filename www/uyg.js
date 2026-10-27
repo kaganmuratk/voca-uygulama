@@ -83,6 +83,7 @@ const yukleniyor = () => { uyg.innerHTML = '<div class="yukleniyor"><i></i></div
 // Hızlı okuma (H1, Kağan 2026-10-25 "sayfa geçişi yavaş"): her sekme geçişi ağ turunu beklemesin. Elde bu oturumda ya da cihazda kalmış kopya varsa
 // HEMEN o gösterilir, arkada sessizce tazelenir (sonraki ziyarette yeni gelir). Yazma işlemi (ekle/sil/pratik sonucu/giriş) olunca kopyalar atılır:
 // o zaman ilk okuma yine ağdan, yani kullanıcı kendi yaptığı değişikliği hep güncel görür.
+let ISINDI = false;
 let ONB_SURUM = 0;
 const ONB = new Map(), ONB_YENILEME = new Map();
 function onbellekGecersiz() {
@@ -208,6 +209,7 @@ async function yonlendir() {
   }
   ustGeri(null);
   if (BEN && profilAd !== BEN.ad && UYGULAMA) { profilAd = BEN.ad; profilBaslat(istek, BEN.ad).then((r) => { if (r && r.tamam) sinyalSifirla(); }); }   // ilgi/sinyal/kaydedilen videolar hesapla senkron (uygulamada)
+  if (BEN && UYGULAMA && !ISINDI) { ISINDI = true; listeAl().catch(() => {}); okuHizli('/gecmis').catch(() => {}); }   // açılışta liste + pratik geçmişi arkada ısınır: Pratik'e ilk girişte ağ turu beklenmez (her yeni kullanıcı için)
   document.body.classList.toggle('misafir', !BEN);
   const ad = h.startsWith('#/hesap') || h.startsWith('#/giris') ? 'hesap' : h.startsWith('#/liste') ? 'liste' : h.startsWith('#/pratik') || h.startsWith('#/gecmis') ? 'pratik' : h.startsWith('#/video') ? 'video' : h.startsWith('#/ara') || h.startsWith('#/ekle') || h === '#/' || h === '#' ? 'ara' : '';
   $$('[data-yol]').forEach((a) => a.classList.toggle('aktif', a.dataset.yol === ad));
