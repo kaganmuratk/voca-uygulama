@@ -11,7 +11,7 @@ rsync -a --exclude 'ses/' --exclude 'sw.js' --exclude 'oynatici*.html' --exclude
 python3 - <<'PY'
 import json, os
 d = json.load(open('www/akis-kendi.json')); d = d if isinstance(d, list) else d.get('videolar', [])
-ids = {v['id'] for v in d[:int(os.environ.get('GOMULU_SAYI', '2'))]}   # varsayılan: ilk 2 video gömülü (ilk açılış), kalanı sunucudan akar (manifestte sunucu:true)
+ids = {v['id'] for v in d[:int(os.environ.get('GOMULU_SAYI', '0'))]}   # varsayılan: gömülü video YOK (Video-Mimari-Plani.md P1): hepsi sunucudan akar (manifestte sunucu:true)
 for k in ('akis-video', 'akis-altyazi'):
     for f in os.listdir('www/' + k):
         if f.split('.')[0] not in ids: os.remove(f'www/{k}/{f}')

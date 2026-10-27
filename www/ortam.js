@@ -28,9 +28,32 @@ export async function apiIstek(yol, { method = 'GET', govde } = {}) {
   return { durum: r.status, veri };
 }
 
+// Video akış listesi sunucudan sayfa sayfa gelir (/api/feed, D1 `video` tablosu; Video-Mimari-Plani.md P1). Son başarılı liste çevrimdışı açılış için saklanır. Boş/hatalıysa null (çağıran paketteki/statik listeye döner).
+const FEED_ANAHTAR = 'voca-feed-v1';
+async function feedAl() {
+  const getir = async (yol) => {
+    if (PAKET) { const H = window.Capacitor?.Plugins?.CapacitorHttp; if (!H) return null; const r = await H.get({ url: SITE + yol, headers: { 'X-Voca-App': '1' }, responseType: 'json' }); if (r.status < 200 || r.status >= 300) return null; return typeof r.data === 'string' ? JSON.parse(r.data) : r.data; }
+    const r = await fetch(yol, { cache: 'no-cache' }); return r.ok ? await r.json() : null;
+  };
+  try {
+    const tum = []; let imle = 0;
+    for (let n = 0; n < 20; n++) {
+      const g = await getir(`/api/feed?limit=100&cursor=${imle}`);
+      if (!g || !Array.isArray(g.videolar)) break;
+      tum.push(...g.videolar);
+      if (g.sonraki == null) break;
+      imle = g.sonraki;
+    }
+    if (tum.length) { try { localStorage.setItem(FEED_ANAHTAR, JSON.stringify(tum)); } catch { /* depolama dolu/kapalı */ } return tum; }
+  } catch { /* ağ yok */ }
+  try { const k = JSON.parse(localStorage.getItem(FEED_ANAHTAR) || 'null'); if (Array.isArray(k) && k.length) return k; } catch { /* kayıt yok */ }
+  return null;
+}
+
 // Sunucudaki herkese açık JSON dosyası (akış listesi, altyazı vb.): uygulamada Capacitor yerel HTTP (CORS yok), sitede fetch. Başarısızsa null.
 export async function jsonAl(yol) {
   try {
+    if (yol === '/akis-kendi.json') { const f = await feedAl(); if (f) return f; }   // önce sunucu listesi (P1); yoksa aşağıdaki paket/statik liste
     if (PAKET && yol === '/akis-kendi.json') { const y = await fetch(yol).then((r) => (r.ok ? r.json() : null)).catch(() => null); if (Array.isArray(y) && y.length) return y; }   // uygulamada video listesi pakettekidir (videolar da gömülü); canlı site eski listeyi tutabilir
     if (!PAKET) { const r = await fetch(yol, { cache: 'no-cache' }); return r.ok ? await r.json() : null; }
     const H = window.Capacitor?.Plugins?.CapacitorHttp; if (!H) return null;
