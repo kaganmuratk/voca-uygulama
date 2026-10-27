@@ -26,34 +26,50 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "kapakAl", returnType: CAPPluginReturnPromise)
     ]
 
-    private let player = AVPlayer()
+    // oynatıcı havuzu: şu an oynayan + sıradaki 2 video ayrı AVPlayer'larda önceden hazırlanır (item yüklü, ilk kare çözülmüş, preroll yapılmış);
+    // kaydırınca yeni video yüklenmez, hazır oynatıcının katmanı öne alınıp oynatılır (replaceCurrentItem+seek gecikmesi, ~150-250 ms, ortadan kalkar)
+    private final class Yuva {
+        let player = AVPlayer()
+        var katman: AVPlayerLayer?
+        var src: String?
+        var damga = Date.distantPast
+        var durumG: NSKeyValueObservation?
+        var hazirG: NSKeyValueObservation?
+        var zamanG: Any?
+    }
+    private let yuvaSayisi = 3
+    private var yuvalar: [Yuva] = []
+    private var aktif: Yuva!
+    private var player: AVPlayer { aktif.player }
     private var oynatici: UIView?
-    private var katman: AVPlayerLayer?
-    private var zamanGozlemci: Any?
-    private var durumGozlemci: NSKeyValueObservation?
-    private var hazirGozlemci: NSKeyValueObservation?
-    private var itemGozlemci: NSKeyValueObservation?
     private var bittiGozlemci: NSObjectProtocol?
     private var hiz: Float = 1
     private var baslangic = Date()
-    private var onbellek: [String: AVPlayerItem] = [:]
-    private var onbellekSira: [String] = []
     private var ilkKareGonderildi = false
 
     override public func load() {
-        player.automaticallyWaitsToMinimizeStalling = false
-        player.isMuted = true
-        player.actionAtItemEnd = .none
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [])
         try? AVAudioSession.sharedInstance().setActive(true)
-        zamanGozlemci = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { [weak self] t in
-            guard let self = self, self.player.currentItem != nil else { return }
-            let d = self.player.currentItem?.duration.seconds ?? 0
-            if !self.ilkKareGonderildi, self.player.timeControlStatus == .playing, t.seconds > 0.04 {   // isReadyForDisplay yeni videoda değişmezse "ilk kare" hiç gelmezdi (kapak videonun üstünde kalıp donuk görünürdü): oynatma ilerliyorsa kare çizilmiştir
-                self.ilkKareGonderildi = true
-                self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
+        for _ in 0..<yuvaSayisi {
+            let y = Yuva()
+            y.player.automaticallyWaitsToMinimizeStalling = false   // preroll(atRate:) için de şart
+            y.player.isMuted = true
+            y.player.actionAtItemEnd = .none
+            y.zamanG = y.player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { [weak self, weak y] t in
+                guard let self = self, let y = y, y === self.aktif, y.player.currentItem != nil else { return }
+                let d = y.player.currentItem?.duration.seconds ?? 0
+                if !self.ilkKareGonderildi, y.player.timeControlStatus == .playing, t.seconds > 0.04 {   // isReadyForDisplay yeni videoda değişmezse "ilk kare" hiç gelmezdi (kapak videonun üstünde kalıp donuk görünürdü): oynatma ilerliyorsa kare çizilmiştir
+                    self.ilkKareGonderildi = true
+                    self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
+                }
+                self.notifyListeners("zaman", data: ["t": t.seconds, "d": d.isFinite ? d : 0])
             }
-            self.notifyListeners("zaman", data: ["t": t.seconds, "d": d.isFinite ? d : 0])
+            yuvalar.append(y)
+        }
+        aktif = yuvalar[0]
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+            for y in self.yuvalar where y !== self.aktif { self.yuvaBosalt(y) }   // bellek azsa komşu oynatıcıları bırak, şu anki sürer
         }
         arkaPlanKur()
         bittiGozlemci = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] n in
@@ -176,19 +192,43 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func item(_ s: String) -> AVPlayerItem? {
-        if let o = onbellek[s] { onbellek[s] = nil; onbellekSira.removeAll { $0 == s }; return o }
         guard let u = adres(s) else { return nil }
         let it = AVPlayerItem(asset: AVURLAsset(url: u))
         it.preferredForwardBufferDuration = 4
         return it
     }
 
-    private func gozlemKur(_ it: AVPlayerItem) {
-        itemGozlemci = it.observe(\.status, options: [.new]) { [weak self] it, _ in
-            if it.status == .failed {
-                self?.notifyListeners("hata", data: ["m": it.error?.localizedDescription ?? "hata"])
+    private func yuvaBosalt(_ y: Yuva) {
+        y.player.pause(); y.player.replaceCurrentItem(with: nil)
+        y.durumG = nil; y.src = nil; y.damga = .distantPast
+    }
+
+    // item'i yuvaya yükler; hazır olunca preroll ile ilk kareye ve oynatmaya hazırlar
+    private func yukle(_ y: Yuva, src: String, item it: AVPlayerItem) {
+        y.player.pause()
+        y.src = src
+        y.player.replaceCurrentItem(with: it)
+        y.durumG = it.observe(\.status, options: [.new]) { [weak self, weak y] it, _ in
+            guard let self = self, let y = y else { return }
+            if it.status == .readyToPlay {
+                if y.player.rate == 0 { y.player.preroll(atRate: 1) { _ in } }
+            } else if it.status == .failed {
+                y.src = nil
+                if y === self.aktif { self.notifyListeners("hata", data: ["m": it.error?.localizedDescription ?? "hata"]) }
             }
         }
+    }
+
+    // şu anki dışındaki yuva: önce boş olan, yoksa en eski kullanılan
+    private func bosYuva() -> Yuva? {
+        let aday = yuvalar.filter { $0 !== aktif }
+        return aday.first { $0.src == nil } ?? aday.min { $0.damga < $1.damga }
+    }
+
+    private func katmanGorunur(_ y: Yuva) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        for o in yuvalar { o.katman?.opacity = (o === y) ? 1 : 0 }
+        CATransaction.commit()
     }
 
     @objc func ac(_ call: CAPPluginCall) {
@@ -204,18 +244,24 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                 v.backgroundColor = .black
                 v.isUserInteractionEnabled = false
                 ust.insertSubview(v, belowSubview: wv)
-                let k = AVPlayerLayer(player: self.player)
-                k.videoGravity = .resizeAspectFill
-                v.layer.addSublayer(k)
-                self.oynatici = v; self.katman = k
-                self.hazirGozlemci = k.observe(\.isReadyForDisplay, options: [.new]) { [weak self] k, _ in
-                    guard let self = self, k.isReadyForDisplay, !self.ilkKareGonderildi else { return }
-                    self.ilkKareGonderildi = true
-                    self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
+                self.oynatici = v
+                for y in self.yuvalar {
+                    let k = AVPlayerLayer(player: y.player)
+                    k.videoGravity = .resizeAspectFill
+                    k.opacity = (y === self.aktif) ? 1 : 0
+                    v.layer.addSublayer(k)
+                    y.katman = k
+                    y.hazirG = k.observe(\.isReadyForDisplay, options: [.new]) { [weak self, weak y] k, _ in
+                        guard let self = self, let y = y, y === self.aktif, k.isReadyForDisplay, !self.ilkKareGonderildi else { return }
+                        self.ilkKareGonderildi = true
+                        self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
+                    }
                 }
             }
             self.oynatici?.frame = CGRect(x: wv.frame.minX + x, y: wv.frame.minY + y, width: w, height: h)
-            self.katman?.frame = CGRect(x: 0, y: 0, width: w, height: h)
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            for yy in self.yuvalar { yy.katman?.frame = CGRect(x: 0, y: 0, width: w, height: h) }
+            CATransaction.commit()
             self.oynatici?.isHidden = false
             call.resolve()
         }
@@ -223,7 +269,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func kapat(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            self.player.pause(); self.player.replaceCurrentItem(with: nil)
+            for y in self.yuvalar { self.yuvaBosalt(y) }
             self.beklenenOynuyor = false
             self.oynatici?.isHidden = true
             call.resolve()
@@ -235,15 +281,34 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         let sessiz = call.getBool("sessiz") ?? true
         hiz = Float(call.getDouble("hiz") ?? 1)
         DispatchQueue.main.async {
-            guard let it = self.item(src) else { call.reject("video bulunamadı"); return }
+            let onceki = self.aktif!
+            var y = self.yuvalar.first { $0.src == src && $0.player.currentItem != nil }
+            let hazirdi = y != nil
+            if y == nil {
+                guard let it = self.item(src), let bos = self.bosYuva() else { call.reject("video bulunamadı"); return }
+                self.yukle(bos, src: src, item: it)
+                y = bos
+            }
+            guard let yeni = y else { call.reject("video bulunamadı"); return }
             self.ilkKareGonderildi = false
             self.baslangic = Date()
             self.beklenenOynuyor = true
-            self.gozlemKur(it)
-            self.player.isMuted = sessiz
-            self.player.replaceCurrentItem(with: it)
-            self.player.seek(to: .zero)
-            self.player.playImmediately(atRate: self.hiz)
+            if onceki !== yeni {
+                onceki.player.pause(); onceki.player.isMuted = true
+                onceki.player.seek(to: .zero)   // geri kaydırınca da hazır beklesin
+            }
+            yeni.damga = Date()
+            self.aktif = yeni
+            yeni.player.isMuted = sessiz
+            self.katmanGorunur(yeni)
+            let baslat = { yeni.player.playImmediately(atRate: self.hiz) }
+            if hazirdi && yeni.player.currentTime().seconds > 0.05 {
+                yeni.player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in DispatchQueue.main.async { baslat() } }
+            } else { baslat() }
+            if hazirdi, yeni.katman?.isReadyForDisplay == true {   // kare zaten çözülmüş: KVO yeniden tetiklenmez, ilk kare hemen
+                self.ilkKareGonderildi = true
+                self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000), "havuz": true])
+            }
             call.resolve()
         }
     }
@@ -280,7 +345,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async { if self.player.rate != 0 { self.player.rate = self.hiz }; call.resolve() }
     }
 
-    // sıradaki videoyu önden hazırla (ilk parçalar iner); en çok 3 tane tutulur
+    // sıradaki videoyu önden hazırla: diske iner, "hazir" ise oynatıcı havuzunda ilk kareye hazırlanır
     @objc func onceden(_ call: CAPPluginCall) {
         guard let src = call.getString("src") else { call.resolve(); return }
         DispatchQueue.main.async {
@@ -288,12 +353,14 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                 self.diskeIndir(src)
                 self.kapakIndir(src.replacingOccurrences(of: ".mp4", with: ".jpg")) { _ in }
             }
-            if self.onbellek[src] == nil, let u = self.adres(src) {
-                let it = AVPlayerItem(asset: AVURLAsset(url: u))
-                it.preferredForwardBufferDuration = 4
-                self.onbellek[src] = it; self.onbellekSira.append(src)
-                while self.onbellekSira.count > 3 { let eski = self.onbellekSira.removeFirst(); self.onbellek[eski] = nil }
-                it.asset.loadValuesAsynchronously(forKeys: ["playable"], completionHandler: nil)
+            // "hazir": yalnız en yakın 2 komşu oynatıcı havuzuna alınır; sonrakiler yalnız diske iner
+            if call.getBool("hazir") ?? false {
+                if let y = self.yuvalar.first(where: { $0.src == src && $0.player.currentItem != nil }) {
+                    if y !== self.aktif { y.damga = Date() }
+                } else if let it = self.item(src), let y = self.bosYuva() {
+                    self.yukle(y, src: src, item: it)
+                    y.damga = Date()
+                }
             }
             call.resolve()
         }
