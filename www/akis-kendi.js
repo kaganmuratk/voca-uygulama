@@ -13,7 +13,20 @@ export const ilgiSorulduMu = KS.ilgiSorulduMu, ilgiSecenekleri = KS.ilgiSecenekl
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mutlak = (y) => (PAKET ? SITE + y : y);
 // Yerel video oynatıcı (iPhone'un kendi AVPlayer'ı, web görünümünün altında): Düşük Güç Modu/otomatik başlatma kısıtı yok. Eklenti yoksa ya da localStorage 'voca-native' = '0' ise eski <video> yolu.
-const VV = (() => { try { const C = window.Capacitor; if (!PAKET || !C || C.getPlatform?.() !== 'ios' || !C.isPluginAvailable?.('VocaVideo') || localStorage.getItem('voca-native') === '0') return null; return C.registerPlugin('VocaVideo'); } catch { return null; } })();
+let VV_TANI = '';   // yerel oynatıcı neden devrede değil (ekranda tanı satırında görünür)
+const VV = (() => {
+  try {
+    const C = window.Capacitor;
+    if (!PAKET) { VV_TANI = 'paket-yok'; return null; }
+    if (!C) { VV_TANI = 'Capacitor-yok'; return null; }
+    if (C.getPlatform?.() !== 'ios') { VV_TANI = 'platform ' + C.getPlatform?.(); return null; }
+    if (localStorage.getItem('voca-native') === '0') { VV_TANI = 'kapatıldı'; return null; }
+    const baslik = (C.PluginHeaders || []).map((h) => h.name);
+    const var_ = C.isPluginAvailable?.('VocaVideo') || baslik.includes('VocaVideo') || !!C.Plugins?.VocaVideo;
+    if (!var_) { VV_TANI = 'eklenti-yok [' + baslik.join(',') + ']'; return null; }
+    return C.registerPlugin('VocaVideo');
+  } catch (h) { VV_TANI = 'hata ' + String((h && h.message) || h).slice(0, 40); return null; }
+})();
 const gomulu = (v) => PAKET && !!v && !v.sunucu;   // uygulama paketine gömülü video (deneme havuzu); manifestte `sunucu: true` olan videolar sunucudan gelir (sitedeki gibi: tam indir, blob olarak ver, kalıcı önbelleğe yaz)
 const AY_ANAHTAR = 'voca-altyazi-ust';   // altyazının üstten konumu (sahne yüksekliğinin oranı; varsayılan 0,5 = ekranın ortası)
 const ayOku = () => { try { const v = parseFloat(localStorage.getItem(AY_ANAHTAR)); return Number.isFinite(v) ? Math.min(0.88, Math.max(0.1, v)) : 0.5; } catch { return 0.5; } };
@@ -130,7 +143,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   };
   for (const ad of Object.keys(OLAY_KISA)) liste.addEventListener(ad, (ev) => { if (ev.target === vid(aktif)) olayYaz(ad, ev.target.currentTime); }, true);
   const olcAl = (ad) => { if (olc && olc.bn === sayac && olc[ad] === undefined) olc[ad] = Math.round(performance.now() - gecisT0); };
-  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
+  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
   const durum = (i, m) => {
     const el = kart(i)?.querySelector('.kv-durum'); if (!el) return;
     el.textContent = m || ''; el.hidden = !m;
