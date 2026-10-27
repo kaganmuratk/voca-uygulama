@@ -24,7 +24,9 @@ const VV = (() => {
     const baslik = (C.PluginHeaders || []).map((h) => h.name);
     const var_ = C.isPluginAvailable?.('VocaVideo') || baslik.includes('VocaVideo') || !!C.Plugins?.VocaVideo;
     if (!var_) { VV_TANI = 'eklenti-yok [' + baslik.join(',') + ']'; return null; }
-    return C.registerPlugin('VocaVideo');
+    if (C.Plugins?.VocaVideo) return C.Plugins.VocaVideo;   // iOS yerel köprü eklentiyi PluginHeaders'tan buraya koyar (registerPlugin web paketinde yok)
+    if (typeof C.registerPlugin === 'function') return C.registerPlugin('VocaVideo');
+    VV_TANI = 'registerPlugin-yok, Plugins:[' + Object.keys(C.Plugins || {}).join(',') + ']'; return null;
   } catch (h) { VV_TANI = 'hata ' + String((h && h.message) || h).slice(0, 40); return null; }
 })();
 const gomulu = (v) => PAKET && !!v && !v.sunucu;   // uygulama paketine gömülü video (deneme havuzu); manifestte `sunucu: true` olan videolar sunucudan gelir (sitedeki gibi: tam indir, blob olarak ver, kalıcı önbelleğe yaz)
