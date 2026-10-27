@@ -138,7 +138,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     // kapak resmi: web görünümü sunucudan gelen kapağı çözemedi ("Cannot decode", telefonda ölçüldü 2026-10-27) → yerel taraf indirip diske yazar, JS dosya adresiyle gösterir
     private func kapakIndir(_ s: String, tamam: @escaping (URL?) -> Void) {
         guard let k = kimlik(s), let u = URL(string: s) else { tamam(nil); return }
-        let hedef = onbellekKlasoru.appendingPathComponent(k + ".jpg")
+        let hedef = onbellekKlasoru.appendingPathComponent(k + ".k2.jpg")   // k2: kapaklar videonun 0. karesinden yeniden üretildi (eski önbellek geçersiz)
         if FileManager.default.fileExists(atPath: hedef.path) { tamam(hedef); return }
         URLSession.shared.downloadTask(with: u) { tmp, yanit, _ in
             guard let tmp = tmp, (yanit as? HTTPURLResponse)?.statusCode == 200 else { DispatchQueue.main.async { tamam(nil) }; return }

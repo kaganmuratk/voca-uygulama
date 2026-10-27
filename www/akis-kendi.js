@@ -190,7 +190,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   liste.innerHTML = videolar.map((v) => `
     <article class="kv-kart" data-id="${v.id}">
       <div class="kv-sahne">
-        <img class="kv-kapak" src="${e(gomulu(v) ? v.kapak : mutlak(v.kapak))}" alt="" decoding="async" draggable="false">
+        <img class="kv-kapak" ${VV && !gomulu(v) ? '' : `src="${e(gomulu(v) ? v.kapak : mutlak(v.kapak))}"`} alt="" decoding="async" draggable="false">
         <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture></video>
         <div class="kv-tani" aria-hidden="true"></div>
         <div class="kv-tap"></div>
@@ -250,7 +250,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   }
   const nativSrc = (v) => (gomulu(v) ? v.mp4 : mutlak(v.mp4));
   function komsulariHazirla(i) {
-    if (VV) { for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) { VV.onceden({ src: nativSrc(videolar[n]) }).catch(() => {}); altyaziAl(videolar[n].id); } return; }   // yerel oynatıcı: sıradaki 3 video önden hazırlanır; sunucudakiler telefona kalıcı iner (disk önbelleği, sonraki açılışta hazır)
+    if (VV) {
+      // yerel oynatıcıda sunucu kapağı <img src=https> ile çözülemiyor (ölçüldü) ve src yokken "?" çıkmaz: kapağı yerel taraf indirir (diskte varsa anında), dosya adresiyle gösterilir
+      for (const n of [i, i + 1, i + 2, i + 3]) {
+        const vk = videolar[n], im = vk && kart(n)?.querySelector('.kv-kapak');
+        if (im && !gomulu(vk) && !im.getAttribute('src') && !im.dataset.kapakIstendi) { im.dataset.kapakIstendi = '1'; VV.kapakAl({ src: mutlak(vk.kapak) }).then((r) => { im.src = window.Capacitor.convertFileSrc('file://' + r.yol); }).catch(() => { delete im.dataset.kapakIstendi; }); }
+      }
+      for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) { VV.onceden({ src: nativSrc(videolar[n]) }).catch(() => {}); altyaziAl(videolar[n].id); } return; }   // yerel oynatıcı: sıradaki 3 video önden hazırlanır; sunucudakiler telefona kalıcı iner (disk önbelleği, sonraki açılışta hazır)
     DEPO.hedefler = () => [videolar[i], videolar[i + 1], videolar[i + 2], videolar[i + 3], videolar[i - 1]];
     for (let j = i; j <= i + 1; j++) { if (!videolar[j]) continue; if (gomulu(videolar[j])) kaynakVer(j, true); else if (DEPO.blob.has(videolar[j].id)) kaynakVer(j); }   // gömülü: paket içi doğrudan adres (bulunamazsa hata yedeği sunucuya geçer); sunucudaki: inmişse blob
     sakla(i);
