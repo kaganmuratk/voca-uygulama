@@ -117,9 +117,19 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
   const vid = (i) => kart(i)?.querySelector('video');
+    const OLAY_KISA = { playing: 'P', pause: 'A', seeking: 'K', waiting: 'W', volumechange: 'V', ended: 'B' };   // ölçüm: playing/pause/seeking/waiting/volume/ended (başa sarma his şikâyeti için)
+  for (const ad of Object.keys(OLAY_KISA)) liste.addEventListener(ad, (ev) => {
+    if (!olc || ev.target !== vid(aktif)) return;
+    const l = (olc.ev = olc.ev || []); if (l.length >= 10) return;
+    l.push(`${OLAY_KISA[ad]}${Math.round(performance.now() - gecisT0)}${ad === 'seeking' ? '@' + ev.target.currentTime.toFixed(1) : ''}`); olcGoster(aktif);
+  }, true);
   const olcAl = (ad) => { if (olc && olc.bn === sayac && olc[ad] === undefined) olc[ad] = Math.round(performance.now() - gecisT0); };
-  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}`; };
-  const durum = (i, m) => { const el = kart(i)?.querySelector('.kv-durum'); if (el) { el.textContent = m || ''; el.hidden = !m; } };
+  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
+  const durum = (i, m) => {
+    const el = kart(i)?.querySelector('.kv-durum'); if (!el) return;
+    el.textContent = m || ''; el.hidden = !m;
+    if (m && /^Ses kapalı/.test(m)) setTimeout(() => { if (el.textContent === m) { el.textContent = ''; el.hidden = true; } }, 3000);   // ipucu 3 sn görünür, sonra kalkar (üstte kalıcı yazı altyazı sanılıyordu)
+  };
   const ad = () => (kullanici ? kullanici() : '');
 
   const altyaziAl = (id) => {
