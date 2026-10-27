@@ -112,11 +112,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = sirala(ham));
   if (takipSet) videolar = takipVideolari(videolar, takipSet);   // Takip sekmesi: tam sıra (DEPO.sira) bozulmaz, yalnız bu görünüm süzülür
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; if (!takipSet) DEPO.sira = videolar; }
-  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, kayitli = new Set();
+  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, olc = null, kayitli = new Set();
   const altyaziOnbellek = new Map();
   liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
   const vid = (i) => kart(i)?.querySelector('video');
+  const olcAl = (ad) => { if (olc && olc.bn === sayac && olc[ad] === undefined) olc[ad] = Math.round(performance.now() - gecisT0); };
+  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}`; };
   const durum = (i, m) => { const el = kart(i)?.querySelector('.kv-durum'); if (el) { el.textContent = m || ''; el.hidden = !m; } };
   const ad = () => (kullanici ? kullanici() : '');
 
@@ -134,6 +136,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       <div class="kv-sahne">
         <img class="kv-kapak" src="${e(PAKET ? v.kapak : mutlak(v.kapak))}" alt="" decoding="async" draggable="false">
         <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture></video>
+        <div class="kv-tani" aria-hidden="true"></div>
         <div class="kv-tap"></div>
         <div class="kv-oyna" hidden aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></div>
         <div class="kv-bekle"><i></i></div>
@@ -280,12 +283,12 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       el.muted = false;
       setTimeout(() => {
         if (bn !== sayac) return;
-        if (el.paused && !kullaniciDurdu && el.dataset.kullanici !== String(bn)) { el.muted = true; el.play().catch(() => {}); durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); } else if (el.muted) durum(i, 'Ses kapalı. Açmak için ekrana dokun.');
+        if (el.paused && !kullaniciDurdu && el.dataset.kullanici !== String(bn)) { if (olc && olc.bn === bn) { olc.ses = 'durdu'; olcGoster(i); } el.muted = true; el.play().catch(() => {}); durum(i, 'Ses kapalı. Açmak için ekrana dokun.'); } else if (el.muted) durum(i, 'Ses kapalı. Açmak için ekrana dokun.');
       }, 220);
     };
     const dene = (deneme = 0) => {
-      el.muted = true;
-      el.play().then(sesiGeriAc).catch((h) => {
+      el.muted = true; olcAl('play');
+      el.play().then(() => { olcAl('ok'); sesiGeriAc(); }).catch((h) => { olcAl('red');
         if (bn !== sayac || el.dataset.kullanici === String(bn)) return; sonHata = ((h && h.name) || 'hata') + ' r' + el.readyState;
         const gecici = !/NotAllowed/.test(sonHata);
         if (!gecici && otoEngelli && deneme === 0) return engelle();   // bu oturumda otomatik başlatma zaten engelli (Düşük Güç Modu): yeniden deneme yok, simge hemen çıksın
@@ -302,7 +305,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (bn !== sayac || !el.paused || kullaniciDurdu || el.dataset.kullanici === String(bn) || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
       el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(1); }, 250);
     }, 2500);
-    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor'); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
+    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); olcAl('ilk'); olcGoster(i); setTimeout(() => { if (bn === sayac) olcGoster(i); }, 700); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor'); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
     if (!el.paused && el.readyState >= 3) oynadi(); else el.addEventListener('playing', oynadi);
   }
   // Listendeki bir kelime bu videoda geçiyorsa kısa, abartısız ipucu (Kağan 2026-10-19): "evidence kelimen bu videoda geçiyor"
@@ -332,6 +335,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     aktif = i; const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
     if (!k || !el) return;
     durum(i, ''); gecisT0 = performance.now();
+    olc = { bn, kaynak: el.dataset.kaynak ? 1 : 0, hazir: el.dataset.hazir ? 1 : 0, rs: el.readyState, seek: Math.abs(el.currentTime) > 0.2 ? 1 : 0 };   // ölçüm: geçişte nerede ne kadar bekleniyor (ekranda küçük yazı, Kağan'ın telefonda görmesi için)
     komsulariHazirla(i);
     if (el.dataset.kaynak) {   // indirilmiş: anında
       oynat(i);
