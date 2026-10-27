@@ -70,7 +70,7 @@ export async function akisOnYukle() {
   try {
     if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }
     DEPO.hedefler = () => DEPO.sira.slice(0, 2);
-    await isci();
+    if (!PAKET) await isci();   // uygulamada gömülü videolar doğrudan açılır, önden indirmeye gerek yok
   } catch { /* ısınma isteğe bağlı */ }
 }
 export async function akisSirayiHazirla(l, zorla) { if (zorla || !DEPO.sira || DEPO.sira.length !== l.length) DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }   // kişisel sıra (sinyal + listendeki kelimeler); uygulama açılışında zaten hazırsa yeniden kurulmaz
@@ -171,10 +171,11 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
 
   // ——— indirme + kaynak verme ———
   const idx = (id) => videolar.findIndex((v) => v.id === id);
-  function kaynakVer(j) {
+  // dogrudan: uygulamada pakete gömülü videonun kendi adresi (capacitor://…/akis-video/x.mp4). iOS'ta paket içi dosyayı fetch ile okumak çalışmıyor (telefon ölçümü 2026-10-27: kaynak 0, 2,5 sn sonra yedek yol), doğrudan src anında açılıyor.
+  function kaynakVer(j, dogrudan = false) {
     const v = videolar[j], el = vid(j); if (!v || !el || el.dataset.kaynak) return;
-    const u = DEPO.blob.get(v.id); if (!u) return;
-    el.dataset.kaynak = '1'; el.preload = 'auto'; el.muted = true; el.src = u; el.load();
+    const u = dogrudan ? v.mp4 : DEPO.blob.get(v.id); if (!u) return;
+    el.dataset.kaynak = '1'; if (dogrudan) el.dataset.dogrudan = '1'; el.preload = 'auto'; el.muted = true; el.src = u; el.load();
     if (j === aktif) oynat(j);
     else {   // arkada: sessiz oynat, ilk kare çizilince durdur, başa al (kaydırınca anında açılsın)
       const bitir = () => { el.removeEventListener('playing', bitir); if (vid(aktif) !== el) { try { el.pause(); el.currentTime = 0; } catch { /* yok */ } } el.dataset.hazir = '1'; };
@@ -193,9 +194,10 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   }
   function komsulariHazirla(i) {
     DEPO.hedefler = () => [videolar[i], videolar[i + 1], videolar[i + 2], videolar[i + 3], videolar[i - 1]];
-    for (let j = i; j <= i + 1; j++) if (videolar[j] && DEPO.blob.has(videolar[j].id)) kaynakVer(j);
+    if (PAKET) for (let j = i; j <= i + 1; j++) kaynakVer(j, true);   // uygulamada önce paket içi adres; bulunamazsa hata yedeği sunucuya geçer
+    else for (let j = i; j <= i + 1; j++) if (videolar[j] && DEPO.blob.has(videolar[j].id)) kaynakVer(j);
     sakla(i);
-    isci((v) => { const j = idx(v.id); if (j >= 0 && j >= aktif - 1 && j <= aktif + 3) kaynakVer(j); });
+    if (!PAKET) isci((v) => { const j = idx(v.id); if (j >= 0 && j >= aktif - 1 && j <= aktif + 3) kaynakVer(j); });   // sitede: tam indirip blob (uygulamada gömülü videolar için gereksiz; sunucudan videoya geçilince önden çekme planı: yol haritası aşama 4)
     for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) altyaziAl(videolar[n].id);
   }
 
@@ -356,7 +358,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     el.addEventListener('waiting', () => { if (i === aktif) { const k = kart(i); setTimeout(() => { if (i === aktif && vid(i) === el && el.readyState < 3) k.classList.add('yukleniyor'); }, 350); } });
     el.addEventListener('playing', () => { kart(i).classList.remove('yukleniyor'); });
     el.addEventListener('error', () => {
-      if (i === aktif && el.dataset.dogrudan === '1') { el.dataset.dogrudan = '2'; el.dataset.dogrudanHata = 'D' + (el.error?.code ?? '?'); el.src = mutlak(videolar[i].mp4); el.load(); el.play().catch(() => {}); return; }   // paket içi adres olmadı: sunucudan dene
+      if (el.dataset.dogrudan === '1') { el.dataset.dogrudan = '2'; el.dataset.dogrudanHata = 'D' + (el.error?.code ?? '?'); el.src = mutlak(videolar[i].mp4); el.load(); el.play().catch(() => {}); return; }   // paket içi adres olmadı: sunucudan dene
       if (i === aktif && el.dataset.kaynak && el.src) { durum(i, `Video yüklenemedi (${[TANI.get(videolar[i]?.id), el.dataset.dogrudanHata, 'k' + (el.error?.code ?? '?')].filter(Boolean).join(' ')}), sonrakine geçiliyor…`); setTimeout(() => { if (i === aktif) kart(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 4000); }   // 4 sn: Kağan hata kodunu okuyabilsin
     });
   });
