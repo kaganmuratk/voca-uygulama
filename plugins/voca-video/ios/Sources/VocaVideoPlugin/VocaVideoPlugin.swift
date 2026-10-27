@@ -22,7 +22,8 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "onceden", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "durdur", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "onbellekListesi", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "tani", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "tani", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "kapakAl", returnType: CAPPluginReturnPromise)
     ]
 
     private let player = AVPlayer()
@@ -48,6 +49,10 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         zamanGozlemci = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { [weak self] t in
             guard let self = self, self.player.currentItem != nil else { return }
             let d = self.player.currentItem?.duration.seconds ?? 0
+            if !self.ilkKareGonderildi, self.player.timeControlStatus == .playing, t.seconds > 0.04 {   // isReadyForDisplay yeni videoda değişmezse "ilk kare" hiç gelmezdi (kapak videonun üstünde kalıp donuk görünürdü): oynatma ilerliyorsa kare çizilmiştir
+                self.ilkKareGonderildi = true
+                self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
+            }
             self.notifyListeners("zaman", data: ["t": t.seconds, "d": d.isFinite ? d : 0])
         }
         arkaPlanKur()
@@ -126,7 +131,26 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             return da > db
         }
-        for u in sirali.dropFirst(onbellekSiniri) { try? fm.removeItem(at: u) }
+        for u in sirali.filter({ $0.pathExtension == "mp4" }).dropFirst(onbellekSiniri) { try? fm.removeItem(at: u) }
+        for u in sirali.filter({ $0.pathExtension == "jpg" }).dropFirst(onbellekSiniri * 5) { try? fm.removeItem(at: u) }
+    }
+
+    // kapak resmi: web görünümü sunucudan gelen kapağı çözemedi ("Cannot decode", telefonda ölçüldü 2026-10-27) → yerel taraf indirip diske yazar, JS dosya adresiyle gösterir
+    private func kapakIndir(_ s: String, tamam: @escaping (URL?) -> Void) {
+        guard let k = kimlik(s), let u = URL(string: s) else { tamam(nil); return }
+        let hedef = onbellekKlasoru.appendingPathComponent(k + ".jpg")
+        if FileManager.default.fileExists(atPath: hedef.path) { tamam(hedef); return }
+        URLSession.shared.downloadTask(with: u) { tmp, yanit, _ in
+            guard let tmp = tmp, (yanit as? HTTPURLResponse)?.statusCode == 200 else { DispatchQueue.main.async { tamam(nil) }; return }
+            try? FileManager.default.removeItem(at: hedef)
+            try? FileManager.default.moveItem(at: tmp, to: hedef)
+            DispatchQueue.main.async { tamam(hedef) }
+        }.resume()
+    }
+
+    @objc func kapakAl(_ call: CAPPluginCall) {
+        guard let src = call.getString("src") else { call.reject("src yok"); return }
+        kapakIndir(src) { u in if let u = u { call.resolve(["yol": u.path]) } else { call.reject("indirilemedi") } }
     }
 
     // tanı: ses neden gelmiyor? (sessiz bayrağı, ses seviyesi, videoda ses izi, oturum kategorisi, çıkış yolu)
@@ -260,7 +284,10 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func onceden(_ call: CAPPluginCall) {
         guard let src = call.getString("src") else { call.resolve(); return }
         DispatchQueue.main.async {
-            if src.hasPrefix("http") { self.diskeIndir(src) }
+            if src.hasPrefix("http") {
+                self.diskeIndir(src)
+                self.kapakIndir(src.replacingOccurrences(of: ".mp4", with: ".jpg")) { _ in }
+            }
             if self.onbellek[src] == nil, let u = self.adres(src) {
                 let it = AVPlayerItem(asset: AVURLAsset(url: u))
                 it.preferredForwardBufferDuration = 4
