@@ -12,6 +12,7 @@ export const ilgiSorulduMu = KS.ilgiSorulduMu, ilgiSecenekleri = KS.ilgiSecenekl
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const mutlak = (y) => (PAKET ? SITE + y : y);
+const gomulu = (v) => PAKET && !!v && !v.sunucu;   // uygulama paketine gömülü video (deneme havuzu); manifestte `sunucu: true` olan videolar sunucudan gelir (sitedeki gibi: tam indir, blob olarak ver, kalıcı önbelleğe yaz)
 const AY_ANAHTAR = 'voca-altyazi-ust';   // altyazının üstten konumu (sahne yüksekliğinin oranı; varsayılan 0,5 = ekranın ortası)
 const ayOku = () => { try { const v = parseFloat(localStorage.getItem(AY_ANAHTAR)); return Number.isFinite(v) ? Math.min(0.88, Math.max(0.1, v)) : 0.5; } catch { return 0.5; } };
 const HIZLAR = [1, 1.25, 1.5, 2, 0.75, 0.5];
@@ -33,6 +34,7 @@ function sirala(liste) {
 }
 // Kapak ayrı <img> (iOS <video poster>'ı sığdırarak çizer: kenarda siyah, video açılınca 'büyür'); <img object-fit:cover> videoyla aynı kaplar.
 // Kapak: uygulamada pakettekini kullan (sunucudan beklemek siyah ekran demek); sitede sunucudan. Videolar yalnız sunucuda tutulmaya başlayınca burası da mutlak adrese döner.
+let sesAcik = false;      // oturum boyunca: kullanıcı bir kez dokundu mu (iOS sesi yalnız dokunuştan sonra açtırır); video sekmesi yeniden kurulsa da hatırlanır, yoksa her açılışta 'Ses kapalı' yazısı çıkar
 let otoEngelli = false;   // oturum boyunca: iOS otomatik başlatmayı engelledi mi (Düşük Güç Modu); sayfa yeniden kurulsa da hatırlanır
 const TANI = new Map();   // video kimliği → son indirme denemesinin kısa özeti (ekranda hata nedenini göstermek için)
 const videoMu = (buf) => buf.byteLength > 2000 && new TextDecoder().decode(new Uint8Array(buf, 4, 4)) === 'ftyp';   // MP4 dosyası 4. bayttan 'ftyp' ile başlar
@@ -41,7 +43,7 @@ async function indir(v, bitti) {
   DEPO.indiriliyor.add(v.id);
   try {
     let buf = null;
-    let r = PAKET ? await fetch(v.mp4).catch((h) => { TANI.set(v.id, 'P!' + String((h && h.message) || h).slice(0, 30)); return null; }) : null;   // uygulamada pilot videolar pakette gömülü (anında); yoksa kalıcı önbellek, o da yoksa sunucu
+    let r = gomulu(v) ? await fetch(v.mp4).catch((h) => { TANI.set(v.id, 'P!' + String((h && h.message) || h).slice(0, 30)); return null; }) : null;   // uygulamada pilot videolar pakette gömülü (anında); yoksa kalıcı önbellek, o da yoksa sunucu
     if (r) { const b = r.ok ? await r.arrayBuffer().catch(() => null) : null; TANI.set(v.id, `P${r.status} ${(r.headers.get('content-type') || '-').slice(0, 12)} ${b ? b.byteLength : 0}`); if (b && videoMu(b)) buf = b; }   // içerik türü başlığına güvenme (iOS yerel şema bunu vermeyebilir): dosyanın kendisine bak
     if (!buf) {
       buf = await depodanOku(v.id);
@@ -62,7 +64,7 @@ async function indir(v, bitti) {
 }
 async function isci(bitti) {   // tek işçi: o an gereken en öncelikli videoyu indirir (etkin video ağı rakiplerle paylaşmaz)
   if (DEPO.isci) return; DEPO.isci = true;
-  try { for (;;) { const s = DEPO.hedefler().find((v) => v && !DEPO.blob.has(v.id) && (DEPO.hata.get(v.id) || 0) < 2); if (!s) break; await indir(s, bitti); } }
+  try { for (;;) { const s = DEPO.hedefler().find((v) => v && !gomulu(v) && !DEPO.blob.has(v.id) && (DEPO.hata.get(v.id) || 0) < 2); if (!s) break; await indir(s, bitti); } }
   finally { DEPO.isci = false; }
 }
 // Uygulama açılışında çağrılır: liste alınır, sıra belirlenir, ilk 2 video indirilmeye başlar (Video sekmesi açılınca hazır olsun).
@@ -70,7 +72,7 @@ export async function akisOnYukle() {
   try {
     if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }
     DEPO.hedefler = () => DEPO.sira.slice(0, 2);
-    if (!PAKET) await isci();   // uygulamada gömülü videolar doğrudan açılır, önden indirmeye gerek yok
+    await isci();   // gömülü videolar doğrudan açılır (isci onları atlar); sunucudaki videolar önden inip kalıcı önbelleğe yazılır
   } catch { /* ısınma isteğe bağlı */ }
 }
 export async function akisSirayiHazirla(l, zorla) { if (zorla || !DEPO.sira || DEPO.sira.length !== l.length) DEPO.sira = await KS.sirala(l).catch(() => sirala(l)); }   // kişisel sıra (sinyal + listendeki kelimeler); uygulama açılışında zaten hazırsa yeniden kurulmaz
@@ -112,7 +114,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = sirala(ham));
   if (takipSet) videolar = takipVideolari(videolar, takipSet);   // Takip sekmesi: tam sıra (DEPO.sira) bozulmaz, yalnız bu görünüm süzülür
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; if (!takipSet) DEPO.sira = videolar; }
-  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, olc = null, kayitli = new Set();
+  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, olc = null, kayitli = new Set();
   const altyaziOnbellek = new Map();
   liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
@@ -144,7 +146,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   liste.innerHTML = videolar.map((v) => `
     <article class="kv-kart" data-id="${v.id}">
       <div class="kv-sahne">
-        <img class="kv-kapak" src="${e(PAKET ? v.kapak : mutlak(v.kapak))}" alt="" decoding="async" draggable="false">
+        <img class="kv-kapak" src="${e(gomulu(v) ? v.kapak : mutlak(v.kapak))}" alt="" decoding="async" draggable="false">
         <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture></video>
         <div class="kv-tani" aria-hidden="true"></div>
         <div class="kv-tap"></div>
@@ -204,10 +206,9 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   }
   function komsulariHazirla(i) {
     DEPO.hedefler = () => [videolar[i], videolar[i + 1], videolar[i + 2], videolar[i + 3], videolar[i - 1]];
-    if (PAKET) for (let j = i; j <= i + 1; j++) kaynakVer(j, true);   // uygulamada önce paket içi adres; bulunamazsa hata yedeği sunucuya geçer
-    else for (let j = i; j <= i + 1; j++) if (videolar[j] && DEPO.blob.has(videolar[j].id)) kaynakVer(j);
+    for (let j = i; j <= i + 1; j++) { if (!videolar[j]) continue; if (gomulu(videolar[j])) kaynakVer(j, true); else if (DEPO.blob.has(videolar[j].id)) kaynakVer(j); }   // gömülü: paket içi doğrudan adres (bulunamazsa hata yedeği sunucuya geçer); sunucudaki: inmişse blob
     sakla(i);
-    if (!PAKET) isci((v) => { const j = idx(v.id); if (j >= 0 && j >= aktif - 1 && j <= aktif + 3) kaynakVer(j); });   // sitede: tam indirip blob (uygulamada gömülü videolar için gereksiz; sunucudan videoya geçilince önden çekme planı: yol haritası aşama 4)
+    isci((v) => { const j = idx(v.id); if (j >= 0 && j >= aktif - 1 && j <= aktif + 3) kaynakVer(j); });   // sitede: tam indirip blob (uygulamada gömülü videolar için gereksiz; sunucudan videoya geçilince önden çekme planı: yol haritası aşama 4)
     for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) altyaziAl(videolar[n].id);
   }
 
@@ -280,7 +281,8 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   function oynat(i) {   // etkin kartın videosu hazırsa sesli başlat (olmazsa sessiz); takılırsa kendini kurtarır
     const el = vid(i), k = kart(i), bn = sayac; if (!el || !k || el.dataset.basladi === String(bn)) return;
     el.dataset.basladi = String(bn);
-    if (Math.abs(el.currentTime) > 0.2) { try { el.currentTime = 0; } catch { /* yok */ } }
+    let seekBekle = false;   // arkada ilerlemiş video: önce durdur, başa sar, 'seeked' olunca başlat (yoksa başlayıp ~100 ms sonra başa atlıyor; telefon ölçümü 2026-10-27: P31 K132@0.0)
+    if (Math.abs(el.currentTime) > 0.2) { try { el.pause(); el.currentTime = 0; seekBekle = true; } catch { /* yok */ } }
     let sonHata = '';
     const engelle = () => {   // gerçekten engelli (Düşük Güç Modu vb.): spinner KALMAZ, oynat simgesi çıkar. Küçük kod: neden (Kağan'a tanı için)
       otoEngelli = true; if (bn !== sayac || el.dataset.kullanici === String(bn)) return;
@@ -312,7 +314,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       });
     };
     hizUygula(el);
-    dene(0);
+    if (seekBekle) { let git = false; const basla = () => { if (git) return; git = true; if (bn === sayac) dene(0); }; el.addEventListener('seeked', basla, { once: true }); setTimeout(basla, 350); } else dene(0);
     setTimeout(() => {   // 2,5 sn içinde hâlâ oynamıyorsa (kullanıcı durdurmadıysa, simge yoksa): kaynağı yeniden bağla, bir kez daha
       if (bn !== sayac || !el.paused || kullaniciDurdu || el.dataset.kullanici === String(bn) || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
       el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(1); }, 250);
@@ -355,8 +357,8 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       setTimeout(() => { if (bn === sayac && !k.classList.contains('oynuyor') && !k.classList.contains('durdu')) k.classList.add('yukleniyor'); }, 600);   // spinner yalnız 0,6 sn'den uzun beklemede (kısa beklemede titreme yapmasın); indirme bitince kaynakVer → oynat
       setTimeout(() => {   // inmediyse doğrudan adresten dene (yedek): uygulamada önce paketteki dosya (iOS medya için aralık isteğini kendisi karşılar), olmazsa sunucu
         if (bn !== sayac || el.dataset.kaynak) return;
-        el.dataset.kaynak = '1'; el.preload = 'auto'; el.muted = true; if (PAKET) el.dataset.dogrudan = '1'; el.src = PAKET ? v.mp4 : mutlak(v.mp4); el.load(); oynat(i);
-      }, PAKET ? 2500 : 7000);
+        el.dataset.kaynak = '1'; el.preload = 'auto'; el.muted = true; if (gomulu(v)) el.dataset.dogrudan = '1'; el.src = gomulu(v) ? v.mp4 : mutlak(v.mp4); el.load(); oynat(i);
+      }, gomulu(v) ? 2500 : 7000);
     }
     izleyici = setInterval(tik, 50);
     ipucuGoster(i, v, bn);
@@ -388,7 +390,8 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     });
   }
   const sesiAc = () => { sesAcik = true; kutsa(); const el = vid(aktif); if (el && el.muted) { el.muted = false; durum(aktif, ''); } };   // dokunuş = kullanıcı hareketi: sesi açabiliriz
-  liste.addEventListener('touchend', sesiAc, { passive: true });
+  let sessizDokunus = false;   // dokunuş anında video sessizdi mi: öyleyse bu dokunuş yalnız sesi açar, videoyu durdurmaz (Kağan 2026-10-27: dokununca ses açılıp video duruyordu)
+  liste.addEventListener('touchend', () => { sessizDokunus = !!vid(aktif)?.muted; setTimeout(() => { sessizDokunus = false; }, 600); sesiAc(); }, { passive: true });
   liste.addEventListener('contextmenu', (ev) => ev.preventDefault()); liste.addEventListener('selectstart', (ev) => { if (!ev.target.closest?.('input, textarea')) ev.preventDefault(); });   // basılı tutma: seçim/büyüteç/menü çıkmasın
   let surukleSonu = 0;
   liste.addEventListener('click', (ev) => {
@@ -435,6 +438,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     if (ev.target.closest('.kv-sozluk')) return;
     if (ev.target.closest('.kv-altyazi')) return;
     if (ev.target.closest('.kv-sahne') && i === aktif && el) {
+      if (sessizDokunus && !el.paused) { sessizDokunus = false; return; }   // ilk dokunuş: ses açıldı, video oynamaya devam eder
       if (!k.querySelector('.kv-sozluk').hidden) { sozlukKapat(); if (!kullaniciDurdu) { el.play().catch(() => {}); return; } }
       const oy = k.querySelector('.kv-oyna');
       if (el.paused) { kullaniciDurdu = false; oy.hidden = true; k.classList.remove('durdu'); durum(i, ''); if (el.readyState < 2 || el.error) yenidenYukle(el); el.muted = false; el.play().catch(() => { yenidenYukle(el); setTimeout(() => el.play().catch(() => { el.muted = true; el.play().catch(() => { k.classList.add('durdu'); oy.hidden = false; }); }), 200); }); }
