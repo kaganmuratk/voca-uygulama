@@ -341,7 +341,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       }, 220);
     };
     const dene = (deneme = 0) => {
-      el.muted = true; olcAl('play');
+      el.muted = !VV; olcAl('play');   // yerel oynatıcıda sesli başlatma serbest (dokunuş gerekmez)
       el.play().then(() => { olcAl('ok'); sesiGeriAc(); }).catch((h) => { olcAl('red');
         if (bn !== sayac || el.dataset.kullanici === String(bn)) return; sonHata = ((h && h.name) || 'hata') + ' r' + el.readyState;
         const gecici = !/NotAllowed/.test(sonHata);
@@ -486,6 +486,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       else { kullaniciDurdu = true; el.pause(); oy.hidden = false; k.classList.add('durdu'); delete k.dataset.oto; }   // simge YALNIZ kullanıcı durdurunca; altyazı kelimeleri yine tıklanabilir (simge dokunuşu engellemez)
     }
   });
+  if (VV) sesAcik = true;   // yerel oynatıcı: 'ses açmak için dokun' gerekmez
   let kayT = 0;
   liste.addEventListener('scroll', () => { if (VV) { liste.classList.add('kay'); clearTimeout(kayT); kayT = setTimeout(() => liste.classList.remove('kay'), 160); }   // kaydırırken yerel video yerinde kalır: kapaklar görünür, durunca yeniden açılır
     if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); if (liste.querySelector('.kv-kelpanel:not([hidden])')) { liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; } }, { passive: true });

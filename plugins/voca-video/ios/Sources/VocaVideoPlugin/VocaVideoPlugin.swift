@@ -48,6 +48,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             let d = self.player.currentItem?.duration.seconds ?? 0
             self.notifyListeners("zaman", data: ["t": t.seconds, "d": d.isFinite ? d : 0])
         }
+        arkaPlanKur()
         bittiGozlemci = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] n in
             guard let self = self, let it = n.object as? AVPlayerItem, it === self.player.currentItem else { return }
             self.player.seek(to: .zero) { _ in if self.player.rate == 0 && self.beklenenOynuyor { self.player.rate = self.hiz } }
@@ -56,6 +57,22 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private var beklenenOynuyor = false
+    private var arkaPlandaOynuyordu = false
+
+    // uygulama arka plana gidince ses/video durur, dönünce kaldığı yerden sürer
+    private func arkaPlanKur() {
+        let nc = NotificationCenter.default
+        nc.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+            self.arkaPlandaOynuyordu = self.beklenenOynuyor
+            self.player.pause()
+        }
+        nc.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+            if self.arkaPlandaOynuyordu && self.beklenenOynuyor { self.player.playImmediately(atRate: self.hiz) }
+            self.arkaPlandaOynuyordu = false
+        }
+    }
 
     // yol çözümü: http(s) adresi olduğu gibi, "/akis-video/x.mp4" gibi yollar uygulama paketindeki public klasöründen
     private func adres(_ s: String) -> URL? {
