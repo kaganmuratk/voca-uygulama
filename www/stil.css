@@ -1141,3 +1141,10 @@ html, body { overscroll-behavior-y: none; }
 
 .oneri { margin: 4px 0 12px; font-size: 14.5px; color: var(--m2); }
 .oneri a { color: var(--murekkep); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Yerel video oynatıcı (iOS uygulaması): video web görünümünün ALTINDA oynar; üstündeki her katman şeffaf, kapaklar opak */
+html.nativ-video, html.nativ-video body, html.nativ-video main { background: transparent !important; }
+.kv.nativ, .kv.nativ .kv-liste, .kv.nativ .kv-sahne { background: transparent; }
+.kv.nativ .kv-vid { display: none; }
+.kv.nativ .kv-kart.goster .kv-kapak, .kv.nativ .kv-kart.durdu .kv-kapak { opacity: 0; }
+.kv.nativ .kv-liste.kay .kv-kart .kv-kapak { opacity: 1; }

@@ -1,0 +1,9 @@
+{
+  "name": "voca-video",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Voca yerel video oynatıcı (iOS AVPlayer, web görünümünün altında)",
+  "files": ["ios/Sources", "VocaVideo.podspec"],
+  "capacitor": { "ios": { "src": "ios" } },
+  "peerDependencies": { "@capacitor/core": ">=7.0.0" }
+}
