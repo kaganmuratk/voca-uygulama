@@ -150,6 +150,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   };
   for (const ad of Object.keys(OLAY_KISA)) liste.addEventListener(ad, (ev) => { if (ev.target === vid(aktif)) olayYaz(ad, ev.target.currentTime); }, true);
   const olcAl = (ad) => { if (olc && olc.bn === sayac && olc[ad] === undefined) olc[ad] = Math.round(performance.now() - gecisT0); };
+  const ortaTani = (i) => {   // tanı: ekranın ortasındaki "?" hangi öğe? (üstten 4 öğe) + kartın <video> öğesinin durumu
+    try {
+      const el = document.elementsFromPoint(innerWidth / 2, innerHeight * 0.45).slice(0, 4).map((x) => x.tagName.toLowerCase() + (x.className && typeof x.className === 'string' ? '.' + x.className.split(' ')[0] : '')).join('>');
+      const v = kart(i)?.querySelector('video'); const vs = v ? ` vid[ns${v.networkState} rs${v.readyState} e${v.error ? v.error.code : '-'} ${v.currentSrc ? v.currentSrc.slice(0, 28) : 'srcyok'}]` : '';
+      return '\n orta: ' + el + vs;
+    } catch (h) { return ''; }
+  };
   const kapakTani = (i) => {   // tanı: kapak resmi yüklendi mi, yüklenmediyse neden (sunucu kapağı telefonda "?" gösteriyordu)
     const im = kart(i)?.querySelector('.kv-kapak'); if (!im) return '';
     const d = !im.complete ? 'bekler' : im.naturalWidth ? 'ok' : 'HATA ' + (im.dataset.neden || '');
@@ -163,7 +170,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     im.decode().then(() => { im.dataset.dec = 'ok'; }).catch((h) => { im.dataset.dec = String((h && (h.name + ' ' + h.message)) || h).slice(0, 40); });
     fetch(im.src).then((x) => (x.ok ? x.blob() : Promise.reject(new Error('http' + x.status)))).then((b) => { createImageBitmap(b).then((bm) => { im.dataset.bmp = bm.width + 'x' + bm.height + '/' + b.size; }).catch((h) => { im.dataset.bmp = 'HATA ' + String((h && h.message) || h).slice(0, 30); }); im.onload = () => { im.dataset.blob = 'ok'; }; im.src = URL.createObjectURL(b); }).catch((h) => { im.dataset.blob = 'HATA ' + String((h && h.message) || h).slice(0, 20); });
   }, true);
-  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
+  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${ortaTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
   const durum = (i, m) => {
     const el = kart(i)?.querySelector('.kv-durum'); if (!el) return;
     el.textContent = m || ''; el.hidden = !m;
