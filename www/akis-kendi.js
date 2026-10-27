@@ -32,7 +32,7 @@ const VV = (() => {
 // Telefona önceden inmiş videolar (yerel oynatıcının disk önbelleği): yeni açılışta ilk video bunlardan olur, internet beklemez; sıra yine karışık kalır (önbellektekiler kendi içinde sıralı).
 const ONB = new Set();
 const onbHazir = VV ? VV.onbellekListesi().then((r) => { (r.ids || []).forEach((k) => ONB.add(k)); }).catch(() => {}) : Promise.resolve();
-const onbOnce = (l) => (ONB.size ? [...l.filter((v) => ONB.has(v.id)), ...l.filter((v) => !ONB.has(v.id))] : l);
+const onbOnce = (l) => { const on = (v) => (ONB.size ? ONB.has(v.id) : !!VV && gomulu(v)); return VV ? [...l.filter(on), ...l.filter((v) => !on(v))] : l; };   // yerel oynatıcı: önbellek doluysa inmiş videolar önde; ilk açılışta (önbellek boş) gömülü video önde, sunucudan soğuk açılış siyah beklemesin
 const gomulu = (v) => PAKET && !!v && !v.sunucu;   // uygulama paketine gömülü video (deneme havuzu); manifestte `sunucu: true` olan videolar sunucudan gelir (sitedeki gibi: tam indir, blob olarak ver, kalıcı önbelleğe yaz)
 const AY_ANAHTAR = 'voca-altyazi-ust';   // altyazının üstten konumu (sahne yüksekliğinin oranı; varsayılan 0,5 = ekranın ortası)
 const ayOku = () => { try { const v = parseFloat(localStorage.getItem(AY_ANAHTAR)); return Number.isFinite(v) ? Math.min(0.88, Math.max(0.1, v)) : 0.5; } catch { return 0.5; } };
@@ -93,6 +93,7 @@ export async function akisOnYukle() {
   try {
     if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; await onbHazir; DEPO.sira = onbOnce(await KS.sirala(l).catch(() => sirala(l))); }
     DEPO.hedefler = () => DEPO.sira.slice(0, 2);
+    if (VV) DEPO.sira.slice(0, 4).forEach((v) => { if (!gomulu(v)) VV.onceden({ src: mutlak(v.mp4) }).catch(() => {}); });   // açılışta ilk 4 sunucu videosu telefona inmeye başlar
     await isci();   // gömülü videolar doğrudan açılır (isci onları atlar); sunucudaki videolar önden inip kalıcı önbelleğe yazılır
   } catch { /* ısınma isteğe bağlı */ }
 }
@@ -169,7 +170,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   liste.innerHTML = videolar.map((v) => `
     <article class="kv-kart" data-id="${v.id}">
       <div class="kv-sahne">
-        <img class="kv-kapak" src="${e(gomulu(v) ? v.kapak : mutlak(v.kapak))}" alt="" decoding="async" draggable="false">
+        <img class="kv-kapak" src="${e(v.kapak)}" alt="" decoding="async" draggable="false">
         <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture></video>
         <div class="kv-tani" aria-hidden="true"></div>
         <div class="kv-tap"></div>
