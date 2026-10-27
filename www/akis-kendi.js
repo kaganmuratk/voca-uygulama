@@ -31,19 +31,22 @@ function sirala(liste) {
   }
   return sonuc;
 }
+const videoMu = (buf) => buf.byteLength > 2000 && new TextDecoder().decode(new Uint8Array(buf, 4, 4)) === 'ftyp';   // MP4 dosyası 4. bayttan 'ftyp' ile başlar
 async function indir(v, bitti) {
   if (DEPO.blob.has(v.id) || DEPO.indiriliyor.has(v.id) || (DEPO.hata.get(v.id) || 0) >= 2) return;
   DEPO.indiriliyor.add(v.id);
   try {
     let buf = null;
     let r = PAKET ? await fetch(v.mp4).catch(() => null) : null;   // uygulamada pilot videolar pakette gömülü (anında); yoksa kalıcı önbellek, o da yoksa sunucu
-    if (r && r.ok && /video/.test(r.headers.get('content-type') || '')) buf = await r.arrayBuffer();
-    else {
+    if (r && r.ok) { const b = await r.arrayBuffer().catch(() => null); if (b && videoMu(b)) buf = b; }   // içerik türü başlığına güvenme (iOS yerel şema bunu vermeyebilir): dosyanın kendisine bak
+    if (!buf) {
       buf = await depodanOku(v.id);
+      if (buf && !videoMu(buf)) buf = null;   // önceki hatalı kurulumdan kalan HTML'i video sayma
       if (!buf) {
         r = await fetch(mutlak(v.mp4));
         if (!r.ok) throw new Error('http ' + r.status);
         buf = await r.arrayBuffer();
+        if (!videoMu(buf)) throw new Error('video değil');   // sunucu bulamayınca HTML döndürüyor; onu video diye saklama
         depoyaYaz(v.id, buf);   // arka planda kalıcı sakla (beklenmez)
       }
     }
