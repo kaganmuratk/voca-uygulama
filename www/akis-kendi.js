@@ -31,7 +31,9 @@ function sirala(liste) {
   }
   return sonuc;
 }
+// Kapak ayrı <img> (iOS <video poster>'ı sığdırarak çizer: kenarda siyah, video açılınca 'büyür'); <img object-fit:cover> videoyla aynı kaplar.
 // Kapak: uygulamada pakettekini kullan (sunucudan beklemek siyah ekran demek); sitede sunucudan. Videolar yalnız sunucuda tutulmaya başlayınca burası da mutlak adrese döner.
+let otoEngelli = false;   // oturum boyunca: iOS otomatik başlatmayı engelledi mi (Düşük Güç Modu); sayfa yeniden kurulsa da hatırlanır
 const TANI = new Map();   // video kimliği → son indirme denemesinin kısa özeti (ekranda hata nedenini göstermek için)
 const videoMu = (buf) => buf.byteLength > 2000 && new TextDecoder().decode(new Uint8Array(buf, 4, 4)) === 'ftyp';   // MP4 dosyası 4. bayttan 'ftyp' ile başlar
 async function indir(v, bitti) {
@@ -110,7 +112,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = sirala(ham));
   if (takipSet) videolar = takipVideolari(videolar, takipSet);   // Takip sekmesi: tam sıra (DEPO.sira) bozulmaz, yalnız bu görünüm süzülür
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; if (!takipSet) DEPO.sira = videolar; }
-  let hiz = hizOku(), basili = false, basiliSon = 0, otoEngelli = false, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, kayitli = new Set();
+  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, sesAcik = false, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, kayitli = new Set();
   const altyaziOnbellek = new Map();
   liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
@@ -130,7 +132,8 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   liste.innerHTML = videolar.map((v) => `
     <article class="kv-kart" data-id="${v.id}">
       <div class="kv-sahne">
-        <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture poster="${e(PAKET ? v.kapak : mutlak(v.kapak))}"></video>
+        <img class="kv-kapak" src="${e(PAKET ? v.kapak : mutlak(v.kapak))}" alt="" decoding="async" draggable="false">
+        <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture></video>
         <div class="kv-tap"></div>
         <div class="kv-oyna" hidden aria-hidden="true"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></div>
         <div class="kv-bekle"><i></i></div>
@@ -285,10 +288,11 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       el.play().then(sesiGeriAc).catch((h) => {
         if (bn !== sayac || el.dataset.kullanici === String(bn)) return; sonHata = ((h && h.name) || 'hata') + ' r' + el.readyState;
         const gecici = !/NotAllowed/.test(sonHata);
-        if (deneme < (gecici ? 3 : 2)) {   // geçici hatada 3 kez, izin hatasında 2 kez yeniden dene
+        if (!gecici && otoEngelli && deneme === 0) return engelle();   // bu oturumda otomatik başlatma zaten engelli (Düşük Güç Modu): yeniden deneme yok, simge hemen çıksın
+        if (deneme < (gecici ? 3 : 1)) {   // geçici hatada 3 kez, izin hatasında 1 kez yeniden dene
           if (deneme === 0 || !gecici) yenidenYukle(el);
           const bekle = () => { if (bn === sayac) dene(deneme + 1); };
-          if (gecici && el.readyState < 3) { el.addEventListener('canplay', bekle, { once: true }); setTimeout(bekle, 900); } else setTimeout(bekle, gecici ? 250 : 700);
+          if (gecici && el.readyState < 3) { el.addEventListener('canplay', bekle, { once: true }); setTimeout(bekle, 900); } else setTimeout(bekle, 250);
         } else engelle();
       });
     };
