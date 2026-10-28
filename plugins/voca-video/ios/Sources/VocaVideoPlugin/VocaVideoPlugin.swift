@@ -46,11 +46,13 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private var hiz: Float = 1
     private var baslangic = Date()
     private var ilkKareGonderildi = false
+    private var hareketBildirildi = false
+    private var sonHavuz = ""   // tanı: oynatma anında yuvalarda hangi videolar vardı
     private var sonHazirdi = false, sonKopru = 0   // tanı: son oynatma havuzdan mı geldi, JS çağrısı yerel tarafa kaç ms'de ulaştı
 
     private func ilkKareBildir(_ yol: String) {
         ilkKareGonderildi = true
-        notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "hv": sonHazirdi, "kopru": sonKopru, "yol": yol])
+        notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "hv": sonHazirdi, "kopru": sonKopru, "yol": yol, "hp": sonHavuz])
     }
 
     override public func load() {
@@ -66,6 +68,10 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                 let d = y.player.currentItem?.duration.seconds ?? 0
                 if !self.ilkKareGonderildi, y.player.timeControlStatus == .playing, t.seconds > 0.04 {   // isReadyForDisplay yeni videoda değişmezse "ilk kare" hiç gelmezdi (kapak videonun üstünde kalıp donuk görünürdü): oynatma ilerliyorsa kare çizilmiştir
                     self.ilkKareBildir("zaman")
+                }
+                if !self.hareketBildirildi, y.player.timeControlStatus == .playing, t.seconds > 0.03 {   // tanı: video gerçekten ilerlemeye başladığı an
+                    self.hareketBildirildi = true
+                    self.notifyListeners("hareket", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
                 }
                 self.notifyListeners("zaman", data: ["t": t.seconds, "d": d.isFinite ? d : 0])
             }
@@ -303,6 +309,8 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             var y = self.yuvalar.first { $0.src == src && $0.player.currentItem != nil }
             let hazirdi = y != nil
             self.sonHazirdi = hazirdi
+            self.hareketBildirildi = false
+            self.sonHavuz = self.yuvalar.map { self.kimlik($0.src ?? "").map { String($0.suffix(3)) } ?? "-" }.joined(separator: ",") + "<" + (self.kimlik(src).map { String($0.suffix(3)) } ?? "?")
             if y == nil {
                 guard let it = self.item(src), let bos = (onceki.src == nil ? onceki : self.bosYuva(zorla: true)) else { call.reject("video bulunamadı"); return }
                 self.yukle(bos, src: src, item: it)
