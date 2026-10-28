@@ -136,7 +136,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = onbOnce(sirala(ham)));
   if (takipSet) videolar = takipVideolari(videolar, takipSet);   // Takip sekmesi: tam sıra (DEPO.sira) bozulmaz, yalnız bu görünüm süzülür
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; if (!takipSet) DEPO.sira = videolar; }
-  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, kullaniciDurdu = false, gecisT0 = 0, gecisMs = 0, olc = null, kayitli = new Set();
+  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, kullaniciDurdu = false, gecisT0 = 0, kaySon = 0, gecisMs = 0, olc = null, kayitli = new Set();
   const altyaziOnbellek = new Map();
   liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
@@ -170,7 +170,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     im.decode().then(() => { im.dataset.dec = 'ok'; }).catch((h) => { im.dataset.dec = String((h && (h.name + ' ' + h.message)) || h).slice(0, 40); });
     VV.kapakAl({ src: im.src }).then((r) => { im.onload = () => { im.dataset.blob = 'yerel-ok'; }; im.src = window.Capacitor.convertFileSrc('file://' + r.yol); }).catch((h) => { im.dataset.blob = 'HATA ' + String((h && h.message) || h).slice(0, 20); });
   }, true);
-  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.nat !== undefined ? ` · yerel ${o.nat}ms havuz${o.hv} köprü${o.kp} ${o.yol}` : ''}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${ortaTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
+  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.nat !== undefined ? ` · yerel ${o.nat}ms havuz${o.hv} köprü${o.kp} ${o.yol}` : ''}${o.kk !== undefined ? ` · kapak ${o.kk}ms` : ''}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${ortaTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
   const durum = (i, m) => {
     const el = kart(i)?.querySelector('.kv-durum'); if (!el) return;
     el.textContent = m || ''; el.hidden = !m;
@@ -534,7 +534,14 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   });
   if (VV) sesAcik = true;   // yerel oynatıcı: 'ses açmak için dokun' gerekmez
   let kayT = 0;
-  liste.addEventListener('scroll', () => { if (VV) { liste.classList.add('kay'); clearTimeout(kayT); kayT = setTimeout(() => liste.classList.remove('kay'), 160); }   // kaydırırken yerel video yerinde kalır: kapaklar görünür, durunca yeniden açılır
+  liste.addEventListener('scroll', () => {
+    if (VV) {
+      const simdi = performance.now(), kayKaldir = () => { if (!liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); };
+      kaySon = simdi; liste.classList.add('kay'); clearTimeout(kayT);
+      const ak = kart(aktif);
+      if (ak && Math.abs(liste.scrollTop - ak.offsetTop) < 2) kayKaldir();   // kart tam oturdu: kapak HEMEN kalkar (eskiden son kaydırma olayından 160 ms sonra: video hazır olsa da kapak görünüyordu, Kağan'ın hissettiği gecikme)
+      else kayT = setTimeout(kayKaldir, 80);
+    }   // kaydırırken yerel video yerinde kalır: kapaklar görünür, durunca yeniden açılır
     if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); if (liste.querySelector('.kv-kelpanel:not([hidden])')) { liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; } }, { passive: true });
   // ——— basılı tut = 2x (TikTok/Instagram gibi), bırakınca eski hıza dön ———
   liste.addEventListener('pointerdown', (ev) => {
