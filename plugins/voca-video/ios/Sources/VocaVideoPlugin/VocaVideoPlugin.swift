@@ -46,6 +46,12 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private var hiz: Float = 1
     private var baslangic = Date()
     private var ilkKareGonderildi = false
+    private var sonHazirdi = false, sonKopru = 0   // tanı: son oynatma havuzdan mı geldi, JS çağrısı yerel tarafa kaç ms'de ulaştı
+
+    private func ilkKareBildir(_ yol: String) {
+        ilkKareGonderildi = true
+        notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "hv": sonHazirdi, "kopru": sonKopru, "yol": yol])
+    }
 
     override public func load() {
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [])
@@ -59,8 +65,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                 guard let self = self, let y = y, y === self.aktif, y.player.currentItem != nil else { return }
                 let d = y.player.currentItem?.duration.seconds ?? 0
                 if !self.ilkKareGonderildi, y.player.timeControlStatus == .playing, t.seconds > 0.04 {   // isReadyForDisplay yeni videoda değişmezse "ilk kare" hiç gelmezdi (kapak videonun üstünde kalıp donuk görünürdü): oynatma ilerliyorsa kare çizilmiştir
-                    self.ilkKareGonderildi = true
-                    self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
+                    self.ilkKareBildir("zaman")
                 }
                 self.notifyListeners("zaman", data: ["t": t.seconds, "d": d.isFinite ? d : 0])
             }
@@ -253,8 +258,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                     y.katman = k
                     y.hazirG = k.observe(\.isReadyForDisplay, options: [.new]) { [weak self, weak y] k, _ in
                         guard let self = self, let y = y, y === self.aktif, k.isReadyForDisplay, !self.ilkKareGonderildi else { return }
-                        self.ilkKareGonderildi = true
-                        self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
+                        self.ilkKareBildir("kvo")
                     }
                 }
             }
@@ -282,8 +286,10 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         hiz = Float(call.getDouble("hiz") ?? 1)
         DispatchQueue.main.async {
             let onceki = self.aktif!
+            if let t0 = call.getDouble("t0") { self.sonKopru = Int(Date().timeIntervalSince1970 * 1000 - t0) }
             var y = self.yuvalar.first { $0.src == src && $0.player.currentItem != nil }
             let hazirdi = y != nil
+            self.sonHazirdi = hazirdi
             if y == nil {
                 guard let it = self.item(src), let bos = self.bosYuva() else { call.reject("video bulunamadı"); return }
                 self.yukle(bos, src: src, item: it)
@@ -306,8 +312,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                 yeni.player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in DispatchQueue.main.async { baslat() } }
             } else { baslat() }
             if hazirdi, yeni.katman?.isReadyForDisplay == true {   // kare zaten çözülmüş: KVO yeniden tetiklenmez, ilk kare hemen
-                self.ilkKareGonderildi = true
-                self.notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000), "havuz": true])
+                self.ilkKareBildir("hazir")
             }
             call.resolve()
         }
