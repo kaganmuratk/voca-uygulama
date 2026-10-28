@@ -224,10 +224,23 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    // şu anki dışındaki yuva: önce boş olan, yoksa en eski kullanılan
-    private func bosYuva() -> Yuva? {
-        let aday = yuvalar.filter { $0 !== aktif }
+    // şu anki dışındaki yuva: önce boş olan, yoksa en eski kullanılan. Korunan videoların (şu an açılacak + sıradaki 2) yuvası, zorla değilse ezilmez:
+    // JS komşuları oynatmadan ÖNCE ister, korunmazsa az sonra açılacak videonun hazır yuvası boşa gidiyordu (telefonda ölçüldü: havuz0, ~120 ms)
+    private var koru = Set<String>()
+    private var bekleyen: [String] = []
+    private func bosYuva(zorla: Bool = false) -> Yuva? {
+        let aday = yuvalar.filter { $0 !== aktif && (zorla || $0.src == nil || !koru.contains($0.src!)) }
         return aday.first { $0.src == nil } ?? aday.min { $0.damga < $1.damga }
+    }
+
+    // komşuyu havuza al; yer yoksa (korunanlar dolu) bekletir, oynatma geçişinden sonra yerleştirilir
+    private func yerlestir(_ src: String) {
+        if let y = yuvalar.first(where: { $0.src == src && $0.player.currentItem != nil }) {
+            if y !== aktif { y.damga = Date() }
+        } else if let it = item(src), let y = bosYuva() {
+            yukle(y, src: src, item: it)
+            y.damga = Date()
+        } else if !bekleyen.contains(src) { bekleyen.append(src) }
     }
 
     private func katmanGorunur(_ y: Yuva) {
@@ -291,7 +304,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             let hazirdi = y != nil
             self.sonHazirdi = hazirdi
             if y == nil {
-                guard let it = self.item(src), let bos = self.bosYuva() else { call.reject("video bulunamadı"); return }
+                guard let it = self.item(src), let bos = (onceki.src == nil ? onceki : self.bosYuva(zorla: true)) else { call.reject("video bulunamadı"); return }
                 self.yukle(bos, src: src, item: it)
                 y = bos
             }
@@ -314,6 +327,8 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             if hazirdi, yeni.katman?.isReadyForDisplay == true {   // kare zaten çözülmüş: KVO yeniden tetiklenmez, ilk kare hemen
                 self.ilkKareBildir("hazir")
             }
+            let sirada = self.bekleyen; self.bekleyen = []
+            for b in sirada { self.yerlestir(b) }   // geçiş bitti, eski yuva boşaldı: bekleyen komşular yerleşir
             call.resolve()
         }
     }
@@ -353,19 +368,16 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     // sıradaki videoyu önden hazırla: diske iner, "hazir" ise oynatıcı havuzunda ilk kareye hazırlanır
     @objc func onceden(_ call: CAPPluginCall) {
         guard let src = call.getString("src") else { call.resolve(); return }
+        let koruYeni = (call.getArray("koru") as? [String]).map { Set($0) }
         DispatchQueue.main.async {
+            if let k = koruYeni { self.koru = k }
             if src.hasPrefix("http") {
                 self.diskeIndir(src)
                 self.kapakIndir(src.replacingOccurrences(of: ".mp4", with: ".jpg")) { _ in }
             }
             // "hazir": yalnız en yakın 2 komşu oynatıcı havuzuna alınır; sonrakiler yalnız diske iner
             if call.getBool("hazir") ?? false {
-                if let y = self.yuvalar.first(where: { $0.src == src && $0.player.currentItem != nil }) {
-                    if y !== self.aktif { y.damga = Date() }
-                } else if let it = self.item(src), let y = self.bosYuva() {
-                    self.yukle(y, src: src, item: it)
-                    y.damga = Date()
-                }
+                self.yerlestir(src)
             }
             call.resolve()
         }
