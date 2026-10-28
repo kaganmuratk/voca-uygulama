@@ -93,7 +93,7 @@ export async function akisOnYukle() {
   try {
     if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; await onbHazir; DEPO.sira = onbOnce(await KS.sirala(l).catch(() => sirala(l))); }
     DEPO.hedefler = () => DEPO.sira.slice(0, 2);
-    if (VV) DEPO.sira.slice(0, 4).forEach((v) => { if (!gomulu(v)) VV.onceden({ src: mutlak(v.mp4) }).catch(() => {}); });   // açılışta ilk 4 sunucu videosu telefona inmeye başlar
+    if (VV) DEPO.sira.slice(0, 4).forEach((v, k) => { if (!gomulu(v)) VV.onceden({ src: mutlak(v.mp4), hazir: k < 3 }).catch(() => {}); });   // açılışta ilk 4 sunucu videosu telefona inmeye başlar
     await isci();   // gömülü videolar doğrudan açılır (isci onları atlar); sunucudaki videolar önden inip kalıcı önbelleğe yazılır
   } catch { /* ısınma isteğe bağlı */ }
 }
@@ -256,7 +256,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
         const vk = videolar[n], im = vk && kart(n)?.querySelector('.kv-kapak');
         if (im && !gomulu(vk) && !im.getAttribute('src') && !im.dataset.kapakIstendi) { im.dataset.kapakIstendi = '1'; VV.kapakAl({ src: mutlak(vk.kapak) }).then((r) => { im.src = window.Capacitor.convertFileSrc('file://' + r.yol); }).catch(() => { delete im.dataset.kapakIstendi; }); }
       }
-      for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) { VV.onceden({ src: nativSrc(videolar[n]), hazir: n <= i + 2, koru: [i, i + 1, i + 2].filter((m) => videolar[m]).map((m) => nativSrc(videolar[m])) }).catch(() => {}); altyaziAl(videolar[n].id); } return; }   // yerel oynatıcı: sıradaki 3 video önden hazırlanır; sunucudakiler telefona kalıcı iner (disk önbelleği, sonraki açılışta hazır)
+      for (const n of [i + 1, i + 2, i + 3]) if (videolar[n]) { VV.onceden({ src: nativSrc(videolar[n]), hazir: n <= i + 2, koru: [i - 1, i, i + 1, i + 2].filter((m) => videolar[m]).map((m) => nativSrc(videolar[m])) }).catch(() => {}); altyaziAl(videolar[n].id); } return; }   // yerel oynatıcı: sıradaki 3 video önden hazırlanır; sunucudakiler telefona kalıcı iner (disk önbelleği, sonraki açılışta hazır)
     DEPO.hedefler = () => [videolar[i], videolar[i + 1], videolar[i + 2], videolar[i + 3], videolar[i - 1]];
     for (let j = i; j <= i + 1; j++) { if (!videolar[j]) continue; if (gomulu(videolar[j])) kaynakVer(j, true); else if (DEPO.blob.has(videolar[j].id)) kaynakVer(j); }   // gömülü: paket içi doğrudan adres (bulunamazsa hata yedeği sunucuya geçer); sunucudaki: inmişse blob
     sakla(i);

@@ -26,7 +26,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "kapakAl", returnType: CAPPluginReturnPromise)
     ]
 
-    // oynatıcı havuzu: şu an oynayan + sıradaki 2 video ayrı AVPlayer'larda önceden hazırlanır (item yüklü, ilk kare çözülmüş, preroll yapılmış);
+    // oynatıcı havuzu: şu an oynayan + önceki + sıradaki 2 video ayrı AVPlayer'larda önceden hazırlanır (item yüklü, ilk kare çözülmüş, preroll yapılmış);
     // kaydırınca yeni video yüklenmez, hazır oynatıcının katmanı öne alınıp oynatılır (replaceCurrentItem+seek gecikmesi, ~150-250 ms, ortadan kalkar)
     private final class Yuva {
         let player = AVPlayer()
@@ -37,7 +37,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         var hazirG: NSKeyValueObservation?
         var zamanG: Any?
     }
-    private let yuvaSayisi = 3
+    private let yuvaSayisi = 4   // şu anki + önceki + sıradaki 2
     private var yuvalar: [Yuva] = []
     private var aktif: Yuva!
     private var player: AVPlayer { aktif.player }
