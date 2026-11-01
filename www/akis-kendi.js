@@ -170,7 +170,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     im.decode().then(() => { im.dataset.dec = 'ok'; }).catch((h) => { im.dataset.dec = String((h && (h.name + ' ' + h.message)) || h).slice(0, 40); });
     VV.kapakAl({ src: im.src }).then((r) => { im.onload = () => { im.dataset.blob = 'yerel-ok'; }; im.src = window.Capacitor.convertFileSrc('file://' + r.yol); }).catch((h) => { im.dataset.blob = 'HATA ' + String((h && h.message) || h).slice(0, 20); });
   }, true);
-  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.nat !== undefined ? ` · yerel ${o.nat}ms havuz${o.hv} köprü${o.kp} ${o.yol}` : ''}${o.hr !== undefined ? ` · HAREKET ${o.hr}ms` : ''}${o.hp ? ` · yuvalar ${o.hp}` : ''}${o.kk !== undefined ? ` · kapak ${o.kk}ms` : ''}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${ortaTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
+  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `kod v97 · ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.nat !== undefined ? ` · yerel ${o.nat}ms havuz${o.hv} köprü${o.kp} ${o.yol}` : ''}${o.hr !== undefined ? ` · HAREKET ${o.hr}ms` : ''}${o.hp ? ` · yuvalar ${o.hp}` : ''}${o.kk !== undefined ? ` · kapak ${o.kk}ms` : ''}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${ortaTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
   const durum = (i, m) => {
     const el = kart(i)?.querySelector('.kv-durum'); if (!el) return;
     el.textContent = m || ''; el.hidden = !m;
@@ -283,7 +283,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     if (!el.paused) { izSn += 0.05; if (t < oncekiT - 0.5) dongu++; } oncekiT = t;
     let n = -1;
     for (let k = 0; k < satirlar.length && satirlar[k].bas <= t; k++) n = k;
-    if (n >= 0 && t >= satirlar[n].son) n = -1;
+    if (n >= 0 && t >= satirlar[n].son + 2) n = -1;   // duraklamada son satır (ve vurgulu son kelime) ekranda kalır; ancak 2 sn sessizlikten sonra kaybolur (Kağan 2026-11-01: vurgu son söylenen kelimede kalsın)
     if (n !== sira) { sira = n; ciz(aktif, n); }
     const p = kart(aktif)?.querySelector('.kv-satir'); if (!p) return;
     let su = null; p.querySelectorAll('.sozcuk').forEach((x) => { if (+x.dataset.t <= t + 0.05) su = x; });
@@ -534,10 +534,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     }
   });
   if (VV) sesAcik = true;   // yerel oynatıcı: 'ses açmak için dokun' gerekmez
-  let kayT = 0;
+  let kayT = 0, parmakta = false;   // parmak ekrandayken kaydırma olayı durabilir (yarım sürükleyip bekleme): kapaklar o sürece açık kalır, yoksa kapak gelip gider (Kağan 2026-11-01)
+  const kayBitir = () => { if (!VV) return; clearTimeout(kayT); kayT = setTimeout(() => liste.dispatchEvent(new Event('scroll')), 120); };
+  liste.addEventListener('touchstart', () => { parmakta = true; }, { passive: true });
+  for (const o of ['touchend', 'touchcancel']) liste.addEventListener(o, () => { parmakta = false; kayBitir(); }, { passive: true });
   liste.addEventListener('scroll', () => {
     if (VV) {
-      const simdi = performance.now(), kayKaldir = () => { if (!liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); };
+      const simdi = performance.now(), kayKaldir = () => { if (parmakta || !liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); };
       kaySon = simdi; liste.classList.add('kay'); clearTimeout(kayT);
       const ak = kart(aktif);
       if (ak && Math.abs(liste.scrollTop - ak.offsetTop) < 2) kayKaldir();   // kart tam oturdu: kapak HEMEN kalkar (eskiden son kaydırma olayından 160 ms sonra: video hazır olsa da kapak görünüyordu, Kağan'ın hissettiği gecikme)
