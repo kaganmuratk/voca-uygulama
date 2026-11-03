@@ -137,7 +137,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = onbOnce(sirala(ham)));
   if (takipSet) videolar = takipVideolari(videolar, takipSet);   // Takip sekmesi: tam sıra (DEPO.sira) bozulmaz, yalnız bu görünüm süzülür
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; if (!takipSet) DEPO.sira = videolar; }
-  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, kullaniciDurdu = false, gecisT0 = 0, kaySon = 0, gecisMs = 0, olc = null, kayitli = new Set(), iz = null, kayAcAktif = -1;
+  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, kullaniciDurdu = false, gecisT0 = 0, kaySon = 0, gecisMs = 0, olc = null, kayitli = new Set(), iz = null, kayAcAktif = -1, kayBekleyen = null;
   const altyaziOnbellek = new Map();
   liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
@@ -309,7 +309,8 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     o.play = () => {
       if (o.oldu) return Promise.resolve();
       o.paused = false;
-      if (!basladi) { basladi = true; const t0 = Date.now(); if (iz && !iz.oynatEp) iz.oynatEp = t0; cagri(() => VV.oynat({ src: o.src, sessiz: ses, hiz: hizDeger, t0 }), 0); }
+      if (!basladi) { basladi = true; const git = () => { if (o.oldu || o.gitti) return; o.gitti = true; clearTimeout(o.bekT); const t0 = Date.now(); if (iz && !iz.oynatEp) { iz.oynatEp = t0; iz.bekle = t0 - iz.t0; } cagri(() => VV.oynat({ src: o.src, sessiz: ses, hiz: hizDeger, t0 }), 0); };
+        if (liste.classList.contains('kay')) { kayBekleyen = git; o.bekT = setTimeout(git, OYNAT_BEKLE); } else git(); }   // kart hâlâ kayarken oynatma beklenir: video katmanı sabit, kapak kayma bitene dek örter; erken başlayan video kapak kalkınca ileri sıçrıyordu (ekran kaydında kare kare görüldü, Kağan 2026-11-03)
       else { cagri(() => VV.surdur(), 0); if (hazirK) setTimeout(() => ver('playing'), 0); }
       return Promise.resolve();
     };
@@ -324,6 +325,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     VV.addListener('hareket', (e) => { if (olc && olc.hr === undefined) { olc.hr = e.ms; olcGoster(aktif); } if (iz && !iz.hareketEp) iz.hareketEp = (e && e.ep) || Date.now(); if (iz && e) { iz.tcEp = e.tc || 0; iz.tpEp = e.tp || 0; iz.bt = e.bt || null; } nativEl?.hazir(); });   // kapak ilk HAREKETle kalkar (ilk kare çözülmüş ama oynamıyorsa ~200 ms donuk 0. kare görünürdü, Kağan 2026-11-03)
     VV.addListener('zaman', (e) => { nativEl?.zaman(e.t, e.d); });
   }
+  const OYNAT_BEKLE = 600;   // kayma bitmezse (parmak basılı vb.) oynatma en çok bu kadar bekler
   const HAREKET_YEDEK = 600;   // hareket olayı hiç gelmezse (durmuş/hatalı video) kapak yine de kalkar
   const nativKonum = () => { const r = liste.parentElement.getBoundingClientRect(); VV.ac({ x: r.left, y: r.top, w: r.width, h: r.height }).catch(() => {}); };
   if (VV) { document.documentElement.classList.add('nativ-video'); nativKonum(); addEventListener('resize', nativKonum); }
@@ -408,7 +410,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (bn !== sayac || !el.paused || kullaniciDurdu || el.dataset.kullanici === String(bn) || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
       el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(1); }, 250);
     }, 2500);
-    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); olcAl('ilk'); olcGoster(i); setTimeout(() => { if (bn === sayac) olcGoster(i); }, 700); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor', 'goster'); if (iz && !iz.kapakEp) iz.kapakEp = Date.now(); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
+    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); olcAl('ilk'); olcGoster(i); setTimeout(() => { if (bn === sayac) olcGoster(i); }, 700); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor', 'goster'); if (iz && !iz.kapakEp) { iz.kapakEp = Date.now(); iz.kapakT = nativEl ? +nativEl.currentTime.toFixed(3) : null; } hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
     if (!el.paused && el.readyState >= 3) oynadi(); else el.addEventListener('playing', oynadi);
   }
   // Listendeki bir kelime bu videoda geçiyorsa kısa, abartısız ipucu (Kağan 2026-10-19): "evidence kelimen bu videoda geçiyor"
@@ -552,7 +554,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   new MutationObserver((ls) => { for (const m of ls) { const t = m.target; if (!iz || !t.classList || !t.classList.contains('kv-oyna') || t.hidden) continue; if (parmakta || liste.classList.contains('kay')) iz.oynaSurukle++; if (!kullaniciDurdu) iz.oynaYanlis++; } }).observe(liste, { subtree: true, attributes: true, attributeFilter: ['hidden'] });   // ölçüm: ▶ simgesi kullanıcı durdurmadan çıktı mı
   liste.addEventListener('scroll', () => {
     if (VV) {
-      const simdi = performance.now(), kayKaldir = () => { if (parmakta || !liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (iz && kayAcAktif === aktif) iz.titreme++; kayAcAktif = -1; if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); };   // açıldığı videoda geri kalktıysa: kapak gelip gitti (titreme)
+      const simdi = performance.now(), kayKaldir = () => { if (parmakta || !liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (iz && kayAcAktif === aktif) iz.titreme++; kayAcAktif = -1; if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); const b = kayBekleyen; kayBekleyen = null; if (b) b(); };   // açıldığı videoda geri kalktıysa: kapak gelip gitti (titreme)
       const ak = kart(aktif), sap = ak ? Math.abs(liste.scrollTop - ak.offsetTop) : 999;
       if (sap > KAY_ESIK || liste.classList.contains('kay')) {
         kaySon = simdi; if (!liste.classList.contains('kay')) { liste.classList.add('kay'); kayAcAktif = aktif; if (iz) iz.kayAc++; } clearTimeout(kayT);

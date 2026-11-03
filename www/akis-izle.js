@@ -2,7 +2,7 @@
 // Kişisel veri yok: rastgele cihaz kodu, kod sürümü, video kimliği, ms değerleri, karar. Ortak saat = epoch ms (JS Date.now, Swift Date().timeIntervalSince1970).
 import { SITE, PAKET } from './ortam.js';
 
-export const KOD = 'v100';
+export const KOD = 'v101';
 const cihaz = (() => {
   try { let c = localStorage.getItem('voca-izle-cihaz'); if (!c) { c = Math.random().toString(36).slice(2, 10); localStorage.setItem('voca-izle-cihaz', c); } return c; } catch { return 'x' + Math.random().toString(36).slice(2, 8); }
 })();
@@ -19,9 +19,11 @@ export function karar(k) {
   const c = k.titreme === 0;
   const d = k.oynaYanlis === 0;
   const parca = k.tcEp && k.oynatEp ? { kopru: k.tcEp - k.oynatEp, calma: k.tpEp ? k.tpEp - k.tcEp : null, ilerle: k.tpEp && k.hareketEp ? k.hareketEp - k.tpEp : null } : null;   // oynat→playImmediately, playImmediately→playing durumu, playing→ilk hareket
+  const sicrama = k.kapakT == null ? null : k.kapakT <= 0.15;   // kapak kalktığında video kaç sn ilerlemişti (ileri sıçrama)
   const kalan = [];
   if (a === false) kalan.push('hareket' + hareket);
   if (b === false) kalan.push('donuk' + donuk);
+  if (sicrama === false) kalan.push('sicrama' + k.kapakT);
   if (!c) kalan.push('titreme' + k.titreme);
   if (!d) kalan.push('oyna' + k.oynaYanlis);
   return { hareket, donuk, parca, a, b, c, d, gecti: kalan.length === 0 && a !== null, sebep: kalan.join(',') };
