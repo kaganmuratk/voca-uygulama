@@ -321,7 +321,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   }
   if (VV) {
     VV.addListener('ilkKare', (e) => { if (olc && e) { olc.nat = e.ms; olc.hv = e.hv ? 1 : 0; olc.kp = e.kopru; olc.yol = e.yol; olc.hp = e.hp; } if (iz && e) { iz.ilkKareEp = e.ep || Date.now(); iz.hv = e.hv ? 1 : 0; iz.kp = e.kopru; iz.yol = e.yol; } const nv = nativEl, bn0 = sayac; setTimeout(() => { if (nv === nativEl && bn0 === sayac) nv.hazir(); }, HAREKET_YEDEK); setTimeout(() => VV.tani().then((x) => { if (olc) { olc.tn = `ses: ${x.muted ? 'SESSİZ' : 'açık'} v${x.vol} iz${x.izler} ${x.kategori} çıkış${(x.cikti * 100) | 0}% ${x.rota}${x.diger ? ' diğerçalıyor' : ''}`; olcGoster(aktif); } }).catch(() => {}), 700); });
-    VV.addListener('hareket', (e) => { if (olc && olc.hr === undefined) { olc.hr = e.ms; olcGoster(aktif); } if (iz && !iz.hareketEp) iz.hareketEp = (e && e.ep) || Date.now(); nativEl?.hazir(); });   // kapak ilk HAREKETle kalkar (ilk kare çözülmüş ama oynamıyorsa ~200 ms donuk 0. kare görünürdü, Kağan 2026-11-03)
+    VV.addListener('hareket', (e) => { if (olc && olc.hr === undefined) { olc.hr = e.ms; olcGoster(aktif); } if (iz && !iz.hareketEp) iz.hareketEp = (e && e.ep) || Date.now(); if (iz && e) { iz.tcEp = e.tc || 0; iz.tpEp = e.tp || 0; } nativEl?.hazir(); });   // kapak ilk HAREKETle kalkar (ilk kare çözülmüş ama oynamıyorsa ~200 ms donuk 0. kare görünürdü, Kağan 2026-11-03)
     VV.addListener('zaman', (e) => { nativEl?.zaman(e.t, e.d); });
   }
   const HAREKET_YEDEK = 600;   // hareket olayı hiç gelmezse (durmuş/hatalı video) kapak yine de kalkar

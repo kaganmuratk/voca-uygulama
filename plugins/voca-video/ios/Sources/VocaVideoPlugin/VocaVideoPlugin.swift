@@ -37,6 +37,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         var hazirG: NSKeyValueObservation?
         var zamanG: Any?
         var sinirG: Any?
+        var tcG: NSKeyValueObservation?
     }
     private let yuvaSayisi = 4   // şu anki + önceki + sıradaki 2
     private var yuvalar: [Yuva] = []
@@ -48,6 +49,9 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private var baslangic = Date()
     private var ilkKareGonderildi = false
     private var hareketBildirildi = false
+    private var istenenSessiz = true   // JS'in istediği ses durumu; oynatma sessiz başlar, ilk hareketten sonra bu uygulanır (ses motoru ayağa kalkarken başlangıç ~200 ms gecikiyordu, şüphe: ölçülecek)
+    private var tCagri = 0, tPlaying = 0, sesliBasladi = false   // ölçüm (epoch ms): playImmediately çağrısı, timeControlStatus .playing olduğu an
+    private func simdiEp() -> Int { Int(Date().timeIntervalSince1970 * 1000) }
     private var sonHavuz = ""   // tanı: oynatma anında yuvalarda hangi videolar vardı
     private var sonHazirdi = false, sonKopru = 0   // tanı: son oynatma havuzdan mı geldi, JS çağrısı yerel tarafa kaç ms'de ulaştı
 
@@ -60,7 +64,8 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private func hareketBildir() {
         guard !hareketBildirildi else { return }
         hareketBildirildi = true
-        notifyListeners("hareket", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "ep": Int(Date().timeIntervalSince1970 * 1000)])
+        if !istenenSessiz { aktif.player.isMuted = false }   // hareket başladı: istenen ses şimdi açılır
+        notifyListeners("hareket", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "ep": simdiEp(), "tc": tCagri, "tp": tPlaying, "ses": sesliBasladi])
     }
 
     override public func load() {
@@ -79,6 +84,10 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
                 if y.player.timeControlStatus == .playing, t.seconds > 0.03 { self.hareketBildir() }
                 self.notifyListeners("zaman", data: ["t": t.seconds, "d": d.isFinite ? d : 0])
+            }
+            y.tcG = y.player.observe(\.timeControlStatus, options: [.new]) { [weak self, weak y] p, _ in
+                guard let self = self, let y = y, y === self.aktif, p.timeControlStatus == .playing, self.tPlaying == 0 else { return }
+                self.tPlaying = self.simdiEp()   // ölçüm: oynatıcı 'playing' durumuna ne zaman geçti
             }
             y.sinirG = y.player.addBoundaryTimeObserver(forTimes: [NSValue(time: CMTime(seconds: 0.03, preferredTimescale: 600))], queue: .main) { [weak self, weak y] in   // 50 ms'lik periyodik gözlemci hareketi en çok 50 ms geç görürdü
                 guard let self = self, let y = y, y === self.aktif, y.player.timeControlStatus == .playing else { return }
@@ -318,7 +327,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             var y = self.yuvalar.first { $0.src == src && $0.player.currentItem != nil }
             let hazirdi = y != nil
             self.sonHazirdi = hazirdi
-            self.hareketBildirildi = false
+            self.hareketBildirildi = false; self.tCagri = 0; self.tPlaying = 0
             self.sonHavuz = self.yuvalar.map { self.kimlik($0.src ?? "").map { String($0.suffix(3)) } ?? "-" }.joined(separator: ",") + "<" + (self.kimlik(src).map { String($0.suffix(3)) } ?? "?")
             if y == nil {
                 guard let it = self.item(src), let bos = (onceki.src == nil ? onceki : self.bosYuva(zorla: true)) else { call.reject("video bulunamadı"); return }
@@ -335,9 +344,11 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             yeni.damga = Date()
             self.aktif = yeni
-            yeni.player.isMuted = sessiz
+            self.istenenSessiz = sessiz
+            self.sesliBasladi = false   // bu sürümde her oynatma sessiz başlar
+            yeni.player.isMuted = true
             self.katmanGorunur(yeni)
-            let baslat = { yeni.player.playImmediately(atRate: self.hiz) }
+            let baslat = { self.tCagri = self.simdiEp(); yeni.player.playImmediately(atRate: self.hiz) }
             if hazirdi && yeni.player.currentTime().seconds > 0.05 {
                 yeni.player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in DispatchQueue.main.async { baslat() } }
             } else { baslat() }
@@ -374,7 +385,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func sesAyarla(_ call: CAPPluginCall) {
         let s = call.getBool("sessiz") ?? true
-        DispatchQueue.main.async { self.player.isMuted = s; call.resolve() }
+        DispatchQueue.main.async { self.istenenSessiz = s; if s || self.hareketBildirildi { self.player.isMuted = s }; call.resolve() }
     }
 
     @objc func hizAyarla(_ call: CAPPluginCall) {
