@@ -36,6 +36,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         var durumG: NSKeyValueObservation?
         var hazirG: NSKeyValueObservation?
         var zamanG: Any?
+        var sinirG: Any?
     }
     private let yuvaSayisi = 4   // şu anki + önceki + sıradaki 2
     private var yuvalar: [Yuva] = []
@@ -52,7 +53,14 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func ilkKareBildir(_ yol: String) {
         ilkKareGonderildi = true
-        notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "hv": sonHazirdi, "kopru": sonKopru, "yol": yol, "hp": sonHavuz])
+        notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "hv": sonHazirdi, "kopru": sonKopru, "yol": yol, "hp": sonHavuz, "ep": Int(Date().timeIntervalSince1970 * 1000)])
+    }
+
+    // video gerçekten ilerlemeye başladığı an (JS kapağı ilk kare değil bu olayla kaldırır: ilk kare ~30 ms, hareket ~220 ms'de geliyordu, arada donuk 0. kare görünüyordu)
+    private func hareketBildir() {
+        guard !hareketBildirildi else { return }
+        hareketBildirildi = true
+        notifyListeners("hareket", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "ep": Int(Date().timeIntervalSince1970 * 1000)])
     }
 
     override public func load() {
@@ -69,11 +77,12 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                 if !self.ilkKareGonderildi, y.player.timeControlStatus == .playing, t.seconds > 0.04 {   // isReadyForDisplay yeni videoda değişmezse "ilk kare" hiç gelmezdi (kapak videonun üstünde kalıp donuk görünürdü): oynatma ilerliyorsa kare çizilmiştir
                     self.ilkKareBildir("zaman")
                 }
-                if !self.hareketBildirildi, y.player.timeControlStatus == .playing, t.seconds > 0.03 {   // tanı: video gerçekten ilerlemeye başladığı an
-                    self.hareketBildirildi = true
-                    self.notifyListeners("hareket", data: ["ms": Int(Date().timeIntervalSince(self.baslangic) * 1000)])
-                }
+                if y.player.timeControlStatus == .playing, t.seconds > 0.03 { self.hareketBildir() }
                 self.notifyListeners("zaman", data: ["t": t.seconds, "d": d.isFinite ? d : 0])
+            }
+            y.sinirG = y.player.addBoundaryTimeObserver(forTimes: [NSValue(time: CMTime(seconds: 0.03, preferredTimescale: 600))], queue: .main) { [weak self, weak y] in   // 50 ms'lik periyodik gözlemci hareketi en çok 50 ms geç görürdü
+                guard let self = self, let y = y, y === self.aktif, y.player.timeControlStatus == .playing else { return }
+                self.hareketBildir()
             }
             yuvalar.append(y)
         }

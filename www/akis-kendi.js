@@ -8,6 +8,7 @@ import { yerelOku, yerelYaz } from './yerel.js';
 import { depodanOku, depoyaYaz } from './video-depo.js';
 import * as KS from './akis-kisisel.js';
 import { profilPlanla } from './profil-senkron.js';
+import { izleKaydet, izleGonder, KOD as KOD_SURUM } from './akis-izle.js';
 export const ilgiSorulduMu = KS.ilgiSorulduMu, ilgiSecenekleri = KS.ilgiSecenekleri, ilgiSor = KS.ilgiSor;
 
 const e = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -136,7 +137,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   let videolar = DEPO.sira && DEPO.sira.length === ham.length ? DEPO.sira : (DEPO.sira = onbOnce(sirala(ham)));
   if (takipSet) videolar = takipVideolari(videolar, takipSet);   // Takip sekmesi: tam sıra (DEPO.sira) bozulmaz, yalnız bu görünüm süzülür
   if (baslangic) { const k = videolar.findIndex((v) => v.id === baslangic); if (k > 0) videolar = [videolar[k], ...videolar.slice(0, k), ...videolar.slice(k + 1)]; if (!takipSet) DEPO.sira = videolar; }
-  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, kullaniciDurdu = false, gecisT0 = 0, kaySon = 0, gecisMs = 0, olc = null, kayitli = new Set();
+  let hiz = hizOku(), basili = false, basiliSon = 0, aktif = -1, satirlar = [], sira = -1, izleyici = null, sayac = 0, gozlemci = null, kullaniciDurdu = false, gecisT0 = 0, kaySon = 0, gecisMs = 0, olc = null, kayitli = new Set(), iz = null, kayAcAktif = -1;
   const altyaziOnbellek = new Map();
   liste.style.setProperty('--ust', String(ayOku()));
   const kart = (i) => liste.children[i];
@@ -170,7 +171,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     im.decode().then(() => { im.dataset.dec = 'ok'; }).catch((h) => { im.dataset.dec = String((h && (h.name + ' ' + h.message)) || h).slice(0, 40); });
     VV.kapakAl({ src: im.src }).then((r) => { im.onload = () => { im.dataset.blob = 'yerel-ok'; }; im.src = window.Capacitor.convertFileSrc('file://' + r.yol); }).catch((h) => { im.dataset.blob = 'HATA ' + String((h && h.message) || h).slice(0, 20); });
   }, true);
-  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `kod v97 · ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.nat !== undefined ? ` · yerel ${o.nat}ms havuz${o.hv} köprü${o.kp} ${o.yol}` : ''}${o.hr !== undefined ? ` · HAREKET ${o.hr}ms` : ''}${o.hp ? ` · yuvalar ${o.hp}` : ''}${o.kk !== undefined ? ` · kapak ${o.kk}ms` : ''}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${ortaTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
+  const olcGoster = (i) => { const t = kart(i)?.querySelector('.kv-tani'); if (!t || !olc) return; const o = olc; t.textContent = `kod ${KOD_SURUM} · ilk kare ${o.ilk ?? '…'} ms · play ${o.play ?? '-'}→${o.ok ?? (o.red ?? '-')} · kaynak ${o.kaynak} hazır ${o.hazir} rs${o.rs} seek${o.seek}${o.nat !== undefined ? ` · yerel ${o.nat}ms havuz${o.hv} köprü${o.kp} ${o.yol}` : ''}${o.hr !== undefined ? ` · HAREKET ${o.hr}ms` : ''}${o.hp ? ` · yuvalar ${o.hp}` : ''}${o.kk !== undefined ? ` · kapak ${o.kk}ms` : ''}${o.ses ? ' · ses ' + o.ses : ''}${VV ? ' · yerel' : ' · yerel yok: ' + VV_TANI}${kapakTani(i)}${ortaTani(i)}${o.tn ? '\n' + o.tn : ''}${o.ev ? '\nolay ' + o.ev.join(' ') : ''}`; };
   const durum = (i, m) => {
     const el = kart(i)?.querySelector('.kv-durum'); if (!el) return;
     el.textContent = m || ''; el.hidden = !m;
@@ -308,21 +309,22 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     o.play = () => {
       if (o.oldu) return Promise.resolve();
       o.paused = false;
-      if (!basladi) { basladi = true; cagri(() => VV.oynat({ src: o.src, sessiz: ses, hiz: hizDeger, t0: Date.now() }), 0); }
+      if (!basladi) { basladi = true; const t0 = Date.now(); if (iz && !iz.oynatEp) iz.oynatEp = t0; cagri(() => VV.oynat({ src: o.src, sessiz: ses, hiz: hizDeger, t0 }), 0); }
       else { cagri(() => VV.surdur(), 0); if (hazirK) setTimeout(() => ver('playing'), 0); }
       return Promise.resolve();
     };
     o.pause = () => { if (o.oldu) return; o.paused = true; VV.duraklat().catch(() => {}); ver('pause'); };
     o.load = () => {}; o.removeAttribute = () => {};
-    o.hazir = () => { hazirK = true; ver('playing'); };
+    o.hazir = () => { if (hazirK) return; hazirK = true; ver('playing'); };
     o.zaman = (x, y) => { t = x; if (y) d = y; };
     return o;
   }
   if (VV) {
-    VV.addListener('ilkKare', (e) => { if (olc && e) { olc.nat = e.ms; olc.hv = e.hv ? 1 : 0; olc.kp = e.kopru; olc.yol = e.yol; olc.hp = e.hp; } nativEl?.hazir(); setTimeout(() => VV.tani().then((x) => { if (olc) { olc.tn = `ses: ${x.muted ? 'SESSİZ' : 'açık'} v${x.vol} iz${x.izler} ${x.kategori} çıkış${(x.cikti * 100) | 0}% ${x.rota}${x.diger ? ' diğerçalıyor' : ''}`; olcGoster(aktif); } }).catch(() => {}), 700); });
-    VV.addListener('hareket', (e) => { if (olc && olc.hr === undefined) { olc.hr = e.ms; olcGoster(aktif); } });
+    VV.addListener('ilkKare', (e) => { if (olc && e) { olc.nat = e.ms; olc.hv = e.hv ? 1 : 0; olc.kp = e.kopru; olc.yol = e.yol; olc.hp = e.hp; } if (iz && e) { iz.ilkKareEp = e.ep || Date.now(); iz.hv = e.hv ? 1 : 0; iz.kp = e.kopru; iz.yol = e.yol; } const nv = nativEl, bn0 = sayac; setTimeout(() => { if (nv === nativEl && bn0 === sayac) nv.hazir(); }, HAREKET_YEDEK); setTimeout(() => VV.tani().then((x) => { if (olc) { olc.tn = `ses: ${x.muted ? 'SESSİZ' : 'açık'} v${x.vol} iz${x.izler} ${x.kategori} çıkış${(x.cikti * 100) | 0}% ${x.rota}${x.diger ? ' diğerçalıyor' : ''}`; olcGoster(aktif); } }).catch(() => {}), 700); });
+    VV.addListener('hareket', (e) => { if (olc && olc.hr === undefined) { olc.hr = e.ms; olcGoster(aktif); } if (iz && !iz.hareketEp) iz.hareketEp = (e && e.ep) || Date.now(); nativEl?.hazir(); });   // kapak ilk HAREKETle kalkar (ilk kare çözülmüş ama oynamıyorsa ~200 ms donuk 0. kare görünürdü, Kağan 2026-11-03)
     VV.addListener('zaman', (e) => { nativEl?.zaman(e.t, e.d); });
   }
+  const HAREKET_YEDEK = 600;   // hareket olayı hiç gelmezse (durmuş/hatalı video) kapak yine de kalkar
   const nativKonum = () => { const r = liste.parentElement.getBoundingClientRect(); VV.ac({ x: r.left, y: r.top, w: r.width, h: r.height }).catch(() => {}); };
   if (VV) { document.documentElement.classList.add('nativ-video'); nativKonum(); addEventListener('resize', nativKonum); }
 
@@ -406,7 +408,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (bn !== sayac || !el.paused || kullaniciDurdu || el.dataset.kullanici === String(bn) || k.classList.contains('durdu') || el.dataset.kurtarma === String(bn)) return;
       el.dataset.kurtarma = String(bn); yenidenYukle(el); setTimeout(() => { if (bn === sayac) dene(1); }, 250);
     }, 2500);
-    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); olcAl('ilk'); olcGoster(i); setTimeout(() => { if (bn === sayac) olcGoster(i); }, 700); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor', 'goster'); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
+    const oynadi = () => { if (bn !== sayac) return; el.removeEventListener('playing', oynadi); gecisMs = Math.round(performance.now() - gecisT0); olcAl('ilk'); olcGoster(i); setTimeout(() => { if (bn === sayac) olcGoster(i); }, 700); k.classList.remove('yukleniyor', 'durdu'); delete k.dataset.oto; k.classList.add('oynuyor', 'goster'); if (iz && !iz.kapakEp) iz.kapakEp = Date.now(); hizUygula(el); const oy = k.querySelector('.kv-oyna'); if (oy) oy.hidden = true; };
     if (!el.paused && el.readyState >= 3) oynadi(); else el.addEventListener('playing', oynadi);
   }
   // Listendeki bir kelime bu videoda geçiyorsa kısa, abartısız ipucu (Kağan 2026-10-19): "evidence kelimen bu videoda geçiyor"
@@ -421,6 +423,12 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     el.hidden = false; el.classList.remove('gor'); void el.offsetWidth; el.classList.add('gor');
     setTimeout(() => { if (bn === sayac) { el.classList.remove('gor'); setTimeout(() => { el.hidden = true; }, 400); } }, 4000);
   }
+  function izBitir() {   // ayrılan videonun ölçümü: karar verilir, sunucuya sıraya girer
+    if (!iz || iz.bitti) return; iz.bitti = true; iz.kalma = Date.now() - iz.t0;
+    if (iz.kalma > 400) izleKaydet(iz);   // 0,4 sn'den kısa uğranan (hızlı kaydırma) kart ölçülmez
+    iz = null;
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { izBitir(); izleGonder(); } });
   function etkinles(i) {
     if (i === aktif) return;
     const onceki = aktif;
@@ -430,6 +438,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (izSn < 3) KS.olay(ov, 'hizli'); else if (oran >= 0.8) KS.olay(ov, 'tam');
       if (dongu >= 1) KS.olay(ov, 'tekrar');
     }
+    izBitir();
     izSn = 0; dongu = 0; oncekiT = 0;
     if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } setTimeout(() => { if (vid(aktif) !== o) { try { o.currentTime = 0; } catch { /* yok */ } kart(onceki)?.classList.remove('goster'); } }, 450); } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
     clearInterval(izleyici); sozlukKapat(); liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; basili = false; satirlar = []; sira = -1; kullaniciDurdu = false;
@@ -437,6 +446,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     aktif = i; const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
     if (!k || !el) return;
     durum(i, ''); gecisT0 = performance.now();
+    iz = { vid: v.id, nativ: VV ? 1 : 0, t0: Date.now(), oynatEp: 0, ilkKareEp: 0, hareketEp: 0, kapakEp: 0, kayAc: 0, titreme: 0, kucukEngel: 0, oynaYanlis: 0, oynaSurukle: 0, parmak: 0 };
     olc = { bn, kaynak: el.dataset.kaynak ? 1 : 0, hazir: el.dataset.hazir ? 1 : 0, rs: el.readyState, seek: Math.abs(el.currentTime) > 0.2 ? 1 : 0 };   // ölçüm: geçişte nerede ne kadar bekleniyor (ekranda küçük yazı, Kağan'ın telefonda görmesi için)
     komsulariHazirla(i);
     if (el.dataset.kaynak) {   // indirilmiş: anında
@@ -536,15 +546,19 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   if (VV) sesAcik = true;   // yerel oynatıcı: 'ses açmak için dokun' gerekmez
   let kayT = 0, parmakta = false;   // parmak ekrandayken kaydırma olayı durabilir (yarım sürükleyip bekleme): kapaklar o sürece açık kalır, yoksa kapak gelip gider (Kağan 2026-11-01)
   const kayBitir = () => { if (!VV) return; clearTimeout(kayT); kayT = setTimeout(() => liste.dispatchEvent(new Event('scroll')), 120); };
-  liste.addEventListener('touchstart', () => { parmakta = true; }, { passive: true });
+  liste.addEventListener('touchstart', () => { parmakta = true; if (iz) iz.parmak++; }, { passive: true });
   for (const o of ['touchend', 'touchcancel']) liste.addEventListener(o, () => { parmakta = false; kayBitir(); }, { passive: true });
+  const KAY_ESIK = 30;   // px: aktif karttan bu kadar sapmadan kapaklar açılmaz (küçük sürüklemede video yerinde kalır, kapak gelip gitmez; Kağan 2026-11-03)
+  new MutationObserver((ls) => { for (const m of ls) { const t = m.target; if (!iz || !t.classList || !t.classList.contains('kv-oyna') || t.hidden) continue; if (parmakta || liste.classList.contains('kay')) iz.oynaSurukle++; if (!kullaniciDurdu) iz.oynaYanlis++; } }).observe(liste, { subtree: true, attributes: true, attributeFilter: ['hidden'] });   // ölçüm: ▶ simgesi kullanıcı durdurmadan çıktı mı
   liste.addEventListener('scroll', () => {
     if (VV) {
-      const simdi = performance.now(), kayKaldir = () => { if (parmakta || !liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); };
-      kaySon = simdi; liste.classList.add('kay'); clearTimeout(kayT);
-      const ak = kart(aktif);
-      if (ak && Math.abs(liste.scrollTop - ak.offsetTop) < 2) kayKaldir();   // kart tam oturdu: kapak HEMEN kalkar (eskiden son kaydırma olayından 160 ms sonra: video hazır olsa da kapak görünüyordu, Kağan'ın hissettiği gecikme)
-      else kayT = setTimeout(kayKaldir, 80);
+      const simdi = performance.now(), kayKaldir = () => { if (parmakta || !liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (iz && kayAcAktif === aktif) iz.titreme++; kayAcAktif = -1; if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); };   // açıldığı videoda geri kalktıysa: kapak gelip gitti (titreme)
+      const ak = kart(aktif), sap = ak ? Math.abs(liste.scrollTop - ak.offsetTop) : 999;
+      if (sap > KAY_ESIK || liste.classList.contains('kay')) {
+        kaySon = simdi; if (!liste.classList.contains('kay')) { liste.classList.add('kay'); kayAcAktif = aktif; if (iz) iz.kayAc++; } clearTimeout(kayT);
+        if (sap < 2) kayKaldir();   // kart tam oturdu: kapak HEMEN kalkar (eskiden son kaydırma olayından 160 ms sonra: video hazır olsa da kapak görünüyordu, Kağan'ın hissettiği gecikme)
+        else kayT = setTimeout(kayKaldir, 80);
+      } else if (iz && sap >= 2) iz.kucukEngel++;
     }   // kaydırırken yerel video yerinde kalır: kapaklar görünür, durunca yeniden açılır
     if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); if (liste.querySelector('.kv-kelpanel:not([hidden])')) { liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; } }, { passive: true });
   // ——— basılı tut = 2x (TikTok/Instagram gibi), bırakınca eski hıza dön ———
