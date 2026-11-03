@@ -325,7 +325,8 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     VV.addListener('hareket', (e) => { if (olc && olc.hr === undefined) { olc.hr = e.ms; olcGoster(aktif); } if (iz && !iz.hareketEp) iz.hareketEp = (e && e.ep) || Date.now(); if (iz && e) { iz.tcEp = e.tc || 0; iz.tpEp = e.tp || 0; iz.bt = e.bt || null; } nativEl?.hazir(); });   // kapak ilk HAREKETle kalkar (ilk kare çözülmüş ama oynamıyorsa ~200 ms donuk 0. kare görünürdü, Kağan 2026-11-03)
     VV.addListener('zaman', (e) => { nativEl?.zaman(e.t, e.d); });
   }
-  const OYNAT_BEKLE = 600;   // kayma bitmezse (parmak basılı vb.) oynatma en çok bu kadar bekler
+  const OYNAT_SAP = 24;   // px
+  const OYNAT_BEKLE = 450;   // kayma bitmezse (parmak basılı vb.) oynatma en çok bu kadar bekler
   const HAREKET_YEDEK = 600;   // hareket olayı hiç gelmezse (durmuş/hatalı video) kapak yine de kalkar
   const nativKonum = () => { const r = liste.parentElement.getBoundingClientRect(); VV.ac({ x: r.left, y: r.top, w: r.width, h: r.height }).catch(() => {}); };
   if (VV) { document.documentElement.classList.add('nativ-video'); nativKonum(); addEventListener('resize', nativKonum); }
@@ -556,6 +557,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     if (VV) {
       const simdi = performance.now(), kayKaldir = () => { if (parmakta || !liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (iz && kayAcAktif === aktif) iz.titreme++; kayAcAktif = -1; if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); const b = kayBekleyen; kayBekleyen = null; if (b) b(); };   // açıldığı videoda geri kalktıysa: kapak gelip gitti (titreme)
       const ak = kart(aktif), sap = ak ? Math.abs(liste.scrollTop - ak.offsetTop) : 999;
+      if (sap <= OYNAT_SAP && kayBekleyen) { const b = kayBekleyen; kayBekleyen = null; b(); }   // kart neredeyse oturdu: oynat şimdi (hareket ~50 ms sonra gelir; kapak oturunca kalkar). Parmak/kay durumundan bağımsız: önceki sürümde başlama oturmadan ~300 ms sonra oluyordu
       if (sap > KAY_ESIK || liste.classList.contains('kay')) {
         kaySon = simdi; if (!liste.classList.contains('kay')) { liste.classList.add('kay'); kayAcAktif = aktif; if (iz) iz.kayAc++; } clearTimeout(kayT);
         if (sap < 2) kayKaldir();   // kart tam oturdu: kapak HEMEN kalkar (eskiden son kaydırma olayından 160 ms sonra: video hazır olsa da kapak görünüyordu, Kağan'ın hissettiği gecikme)
