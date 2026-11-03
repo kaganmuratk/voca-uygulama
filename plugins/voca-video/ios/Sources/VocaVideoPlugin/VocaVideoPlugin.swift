@@ -38,6 +38,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         var zamanG: Any?
         var sinirG: Any?
         var tcG: NSKeyValueObservation?
+        var prerollDurum = 0   // 0: yok, 1: başladı, 2: bitti (başarılı), 3: başarısız/iptal
     }
     private let yuvaSayisi = 4   // şu anki + önceki + sıradaki 2
     private var yuvalar: [Yuva] = []
@@ -50,6 +51,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private var ilkKareGonderildi = false
     private var hareketBildirildi = false
     private var istenenSessiz = true   // JS'in istediği ses durumu; oynatma sessiz başlar, ilk hareketten sonra bu uygulanır (ses motoru ayağa kalkarken başlangıç ~200 ms gecikiyordu, şüphe: ölçülecek)
+    private var baslatTani: [String: Any] = [:]   // ölçüm: oynat anında yuvanın durumu (preroll bitti mi, kare hazır mı, tampon, başlatma yöntemi)
     private var tCagri = 0, tPlaying = 0, sesliBasladi = false   // ölçüm (epoch ms): playImmediately çağrısı, timeControlStatus .playing olduğu an
     private func simdiEp() -> Int { Int(Date().timeIntervalSince1970 * 1000) }
     private var sonHavuz = ""   // tanı: oynatma anında yuvalarda hangi videolar vardı
@@ -65,7 +67,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         guard !hareketBildirildi else { return }
         hareketBildirildi = true
         if !istenenSessiz { aktif.player.isMuted = false }   // hareket başladı: istenen ses şimdi açılır
-        notifyListeners("hareket", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "ep": simdiEp(), "tc": tCagri, "tp": tPlaying, "ses": sesliBasladi])
+        notifyListeners("hareket", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "ep": simdiEp(), "tc": tCagri, "tp": tPlaying, "ses": sesliBasladi, "bt": baslatTani])
     }
 
     override public func load() {
@@ -236,11 +238,15 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private func yukle(_ y: Yuva, src: String, item it: AVPlayerItem) {
         y.player.pause()
         y.src = src
+        y.prerollDurum = 0
         y.player.replaceCurrentItem(with: it)
         y.durumG = it.observe(\.status, options: [.new]) { [weak self, weak y] it, _ in
             guard let self = self, let y = y else { return }
             if it.status == .readyToPlay {
-                if y.player.rate == 0 { y.player.preroll(atRate: 1) { _ in } }
+                if y.player.rate == 0 {
+                    y.prerollDurum = 1
+                    y.player.preroll(atRate: 1) { [weak y] ok in DispatchQueue.main.async { y?.prerollDurum = ok ? 2 : 3 } }
+                }
             } else if it.status == .failed {
                 y.src = nil
                 if y === self.aktif { self.notifyListeners("hata", data: ["m": it.error?.localizedDescription ?? "hata"]) }
@@ -348,10 +354,22 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             self.sesliBasladi = false   // bu sürümde her oynatma sessiz başlar
             yeni.player.isMuted = true
             self.katmanGorunur(yeni)
-            let baslat = { self.tCagri = self.simdiEp(); yeni.player.playImmediately(atRate: self.hiz) }
+            let it = yeni.player.currentItem
+            let prOk = yeni.prerollDurum == 2 && yeni.player.currentTime().seconds < 0.05
+            self.baslatTani = ["pr": yeni.prerollDurum, "rd": yeni.katman?.isReadyForDisplay ?? false, "lk": it?.isPlaybackLikelyToKeepUp ?? false, "ld": it?.loadedTimeRanges.first.map { $0.timeRangeValue.duration.seconds } ?? 0, "hz": hazirdi, "yontem": prOk ? "saat" : "hemen"]
+            let baslat = {
+                self.tCagri = self.simdiEp()
+                if prOk {   // preroll bitmiş yuva: saate sabitlenmiş başlatma (playImmediately kod çözücü/saati yeniden kurabiliyor, şüphe: ölçülecek)
+                    let su = CMClockGetTime(CMClockGetHostTimeClock())
+                    yeni.player.setRate(self.hiz, time: .invalid, atHostTime: CMTimeAdd(su, CMTime(seconds: 0.02, preferredTimescale: 1000)))
+                } else { yeni.player.playImmediately(atRate: self.hiz) }
+            }
             if hazirdi && yeni.player.currentTime().seconds > 0.05 {
                 yeni.player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in DispatchQueue.main.async { baslat() } }
             } else { baslat() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {   // saatli başlatma sessizce başarısız olursa video donmasın
+                if self.aktif === yeni, self.beklenenOynuyor, yeni.player.rate == 0 { yeni.player.playImmediately(atRate: self.hiz) }
+            }
             if hazirdi, yeni.katman?.isReadyForDisplay == true {   // kare zaten çözülmüş: KVO yeniden tetiklenmez, ilk kare hemen
                 self.ilkKareBildir("hazir")
             }
