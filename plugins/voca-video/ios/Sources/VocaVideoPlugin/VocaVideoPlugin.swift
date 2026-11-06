@@ -31,6 +31,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private final class Yuva {
         let player = AVPlayer()
         var katman: AVPlayerLayer?
+        var idx = -1   // bu yuvanın videosunun sayfa sırası (katman belgede o sayfanın konumunda durur)
         var src: String?
         var damga = Date.distantPast
         var durumG: NSKeyValueObservation?
@@ -48,6 +49,22 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private var aktif: Yuva!
     private var player: AVPlayer { aktif.player }
     private var oynatici: UIView?
+    private var sayfa: [String: Int] = [:]   // video adresi → sayfa sırası (JS kart sırası)
+    private var sayfaY0: CGFloat = 0, sayfaW: CGFloat = 0, sayfaH: CGFloat = 0
+
+    // katmanı videosunun sayfa konumuna koyar; videosu yoksa gizler. Katman belge içinde durduğu için kaydırmayla birebir kayar
+    private func konumla(_ y: Yuva) {
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if let s = y.src, let i = sayfa[s] {
+            y.idx = i
+            y.katman?.frame = CGRect(x: 0, y: sayfaY0 + CGFloat(i) * sayfaH, width: sayfaW, height: sayfaH)
+            y.katman?.opacity = 1
+        } else { y.idx = -1; y.katman?.opacity = 0 }
+        CATransaction.commit()
+    }
+    private func kareBildir(_ y: Yuva, _ hazir: Bool) {
+        if y.idx >= 0 { notifyListeners("kare", data: ["idx": y.idx, "hazir": hazir]) }
+    }
     private var bittiGozlemci: NSObjectProtocol?
     private var hiz: Float = 1
     private var baslangic = Date()
@@ -251,14 +268,18 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func yuvaBosalt(_ y: Yuva) {
+        kareBildir(y, false)
         y.player.pause(); y.player.replaceCurrentItem(with: nil)
         y.durumG = nil; y.src = nil; y.damga = .distantPast
+        konumla(y)
     }
 
     // item'i yuvaya yükler; hazır olunca preroll ile ilk kareye ve oynatmaya hazırlar
     private func yukle(_ y: Yuva, src: String, item it: AVPlayerItem) {
         y.player.pause()
+        kareBildir(y, false)   // yuvanın eski sayfasında artık bu video yok: oradaki kapak geri gelir
         y.src = src
+        konumla(y)
         y.prerollDurum = 0
         y.player.replaceCurrentItem(with: it)
         y.durumG = it.observe(\.status, options: [.new]) { [weak self, weak y] it, _ in
@@ -294,43 +315,45 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         } else if !bekleyen.contains(src) { bekleyen.append(src) }
     }
 
-    private func katmanGorunur(_ y: Yuva) {
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        for o in yuvalar { o.katman?.opacity = (o === y) ? 1 : 0 }
-        CATransaction.commit()
-    }
-
     @objc func ac(_ call: CAPPluginCall) {
-        let x = call.getDouble("x") ?? 0, y = call.getDouble("y") ?? 0
-        let w = call.getDouble("w") ?? 0, h = call.getDouble("h") ?? 0
+        let y0 = CGFloat(call.getDouble("y0") ?? 0)
+        let w = CGFloat(call.getDouble("w") ?? 0), h = CGFloat(call.getDouble("h") ?? 0)
+        let srcs = (call.getArray("srcs") as? [String]) ?? []
         DispatchQueue.main.async {
-            guard let wv = self.bridge?.webView, let ust = wv.superview else { call.reject("web görünümü yok"); return }
+            guard let wv = self.bridge?.webView else { call.reject("web görünümü yok"); return }
             wv.isOpaque = false
             wv.backgroundColor = .clear
             wv.scrollView.backgroundColor = .clear
+            self.sayfaY0 = y0; self.sayfaW = w; self.sayfaH = h
+            self.sayfa = [:]
+            for (i, s) in srcs.enumerated() { self.sayfa[s] = i }
             if self.oynatici == nil {
+                // belgenin KAYDIRMA görünümünün içinde, web içeriğinin altında: kaydırma UIKit'te kartlarla birlikte olur (gecikmesiz)
                 let v = UIView()
                 v.backgroundColor = .black
                 v.isUserInteractionEnabled = false
-                ust.insertSubview(v, belowSubview: wv)
+                wv.scrollView.insertSubview(v, at: 0)
                 self.oynatici = v
                 for y in self.yuvalar {
                     let k = AVPlayerLayer(player: y.player)
                     k.videoGravity = .resizeAspectFill
-                    k.opacity = (y === self.aktif) ? 1 : 0
+                    k.opacity = 0
                     v.layer.addSublayer(k)
                     y.katman = k
                     y.hazirG = k.observe(\.isReadyForDisplay, options: [.new]) { [weak self, weak y] k, _ in
-                        guard let self = self, let y = y, y === self.aktif, k.isReadyForDisplay, !self.ilkKareGonderildi else { return }
+                        guard let self = self, let y = y else { return }
+                        self.kareBildir(y, k.isReadyForDisplay)
+                        guard y === self.aktif, k.isReadyForDisplay, !self.ilkKareGonderildi else { return }
                         self.ilkKareBildir("kvo")
                     }
                 }
+            } else if self.oynatici?.superview == nil {
+                wv.scrollView.insertSubview(self.oynatici!, at: 0)
             }
-            self.oynatici?.frame = CGRect(x: wv.frame.minX + x, y: wv.frame.minY + y, width: w, height: h)
-            CATransaction.begin(); CATransaction.setDisableActions(true)
-            for yy in self.yuvalar { yy.katman?.frame = CGRect(x: 0, y: 0, width: w, height: h) }
-            CATransaction.commit()
+            self.oynatici?.frame = CGRect(x: 0, y: y0, width: w, height: h * CGFloat(max(srcs.count, 1)))
+            for y in self.yuvalar { self.konumla(y) }
             self.oynatici?.isHidden = false
+            for y in self.yuvalar { if let k = y.katman, k.isReadyForDisplay { self.kareBildir(y, true) } }   // sayfa kurulurken zaten hazır olan komşular
             call.resolve()
         }
     }
@@ -340,6 +363,8 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             for y in self.yuvalar { self.yuvaBosalt(y) }
             self.beklenenOynuyor = false
             self.oynatici?.isHidden = true
+            self.oynatici?.removeFromSuperview()
+            self.sayfa = [:]
             call.resolve()
         }
     }
@@ -367,14 +392,13 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             self.beklenenOynuyor = true
             if onceki !== yeni {
                 onceki.player.pause(); onceki.player.isMuted = true
-                self.basaSar(onceki)   // geri kaydırınca da hazır beklesin
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { if self.aktif !== onceki { self.basaSar(onceki) } }   // geri kaydırınca da hazır beklesin; kart hâlâ kısmen görünürken başa sarma karesi görünmesin
             }
             yeni.damga = Date()
             self.aktif = yeni
             self.istenenSessiz = sessiz
             self.sesliBasladi = false   // bu sürümde her oynatma sessiz başlar
             yeni.player.isMuted = true
-            self.katmanGorunur(yeni)
             let it = yeni.player.currentItem
             let sarGerek = hazirdi && (yeni.seekSurer || yeni.player.currentTime().seconds > 0.05)
             let prOk = yeni.prerollDurum == 2 && !sarGerek && yeni.player.currentTime().seconds < 0.05

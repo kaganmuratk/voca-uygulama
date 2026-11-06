@@ -310,7 +310,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
       if (o.oldu) return Promise.resolve();
       o.paused = false;
       if (!basladi) { basladi = true; const git = () => { if (o.oldu || o.gitti) return; o.gitti = true; clearTimeout(o.bekT); const t0 = Date.now(); if (iz && !iz.oynatEp) { iz.oynatEp = t0; iz.bekle = t0 - iz.t0; } cagri(() => VV.oynat({ src: o.src, sessiz: ses, hiz: hizDeger, t0 }), 0); };
-        if (liste.classList.contains('kay')) { kayBekleyen = git; o.bekT = setTimeout(git, OYNAT_BEKLE); } else git(); }   // kart hâlâ kayarken oynatma beklenir: video katmanı sabit, kapak kayma bitene dek örter; erken başlayan video kapak kalkınca ileri sıçrıyordu (ekran kaydında kare kare görüldü, Kağan 2026-11-03)
+        git(); }   // video kendi sayfasında kartla birlikte kayar: kayma bitmesi beklenmez, sayfa %70 görününce hemen başlar (2026-11-06)   // kart hâlâ kayarken oynatma beklenir: video katmanı sabit, kapak kayma bitene dek örter; erken başlayan video kapak kalkınca ileri sıçrıyordu (ekran kaydında kare kare görüldü, Kağan 2026-11-03)
       else { cagri(() => VV.surdur(), 0); if (hazirK) setTimeout(() => ver('playing'), 0); }
       return Promise.resolve();
     };
@@ -324,12 +324,16 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     VV.addListener('ilkKare', (e) => { if (olc && e) { olc.nat = e.ms; olc.hv = e.hv ? 1 : 0; olc.kp = e.kopru; olc.yol = e.yol; olc.hp = e.hp; } if (iz && e) { iz.ilkKareEp = e.ep || Date.now(); iz.hv = e.hv ? 1 : 0; iz.ct = e.ct; iz.kp = e.kopru; iz.yol = e.yol; } const nv = nativEl, bn0 = sayac; setTimeout(() => { if (nv === nativEl && bn0 === sayac) nv.hazir(); }, HAREKET_YEDEK); setTimeout(() => VV.tani().then((x) => { if (olc) { olc.tn = `ses: ${x.muted ? 'SESSİZ' : 'açık'} v${x.vol} iz${x.izler} ${x.kategori} çıkış${(x.cikti * 100) | 0}% ${x.rota}${x.diger ? ' diğerçalıyor' : ''}`; olcGoster(aktif); } }).catch(() => {}), 700); });
     VV.addListener('hareket', (e) => { if (olc && olc.hr === undefined) { olc.hr = e.ms; olcGoster(aktif); } if (iz && !iz.hareketEp) iz.hareketEp = (e && e.ep) || Date.now(); if (iz && e) { iz.tcEp = e.tc || 0; iz.tpEp = e.tp || 0; iz.bt = e.bt || null; } nativEl?.hazir(); });   // kapak ilk HAREKETle kalkar (ilk kare çözülmüş ama oynamıyorsa ~200 ms donuk 0. kare görünürdü, Kağan 2026-11-03)
     VV.addListener('zaman', (e) => { nativEl?.zaman(e.t, e.d); });
+    VV.addListener('kare', (e) => { kart(e.idx)?.classList.toggle('nh', !!e.hazir); });   // o sayfanın ilk karesi yerelde hazır: kapak kalkar (kayarken de, çünkü video kartla birlikte kayıyor)
   }
   const OYNAT_SAP = 24;   // px
   const OYNAT_BEKLE = 450;   // kayma bitmezse (parmak basılı vb.) oynatma en çok bu kadar bekler
   const HAREKET_YEDEK = 600;   // hareket olayı hiç gelmezse (durmuş/hatalı video) kapak yine de kalkar
-  const nativKonum = () => { const r = liste.parentElement.getBoundingClientRect(); VV.ac({ x: r.left, y: r.top, w: r.width, h: r.height }).catch(() => {}); };
-  if (VV) { document.documentElement.classList.add('nativ-video'); nativKonum(); addEventListener('resize', nativKonum); }
+  const nativKonum = () => {   // yerel video katmanları belge içinde kart sayfalarının konumunda durur (kartla birlikte kayar): ilk kartın belge konumu, sayfa boyutu, sayfa sırası = kart sırası
+    const k0 = kart(0); if (!k0) return; const r = k0.getBoundingClientRect();
+    VV.ac({ y0: r.top + scrollY, w: r.width, h: r.height, srcs: videolar.map(nativSrc) }).catch(() => {});
+  };
+  if (VV) { document.documentElement.classList.add('nativ-video'); scrollTo(0, 0); nativKonum(); addEventListener('resize', nativKonum); }
 
   // ——— etkinleştirme ———
   const hizUygula = (el) => { if (!el) return; try { el.defaultPlaybackRate = hiz; el.playbackRate = basili ? 2 : hiz; } catch { /* yok */ } };
@@ -478,7 +482,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
 
   gozlemci = new IntersectionObserver((kayitlar) => {
     for (const k of kayitlar) if (k.isIntersecting && k.intersectionRatio >= 0.7) etkinles([...liste.children].indexOf(k.target));
-  }, { root: liste, threshold: [0.7] });
+  }, { root: VV ? null : liste, threshold: [0.7] });
   [...liste.children].forEach((k) => gozlemci.observe(k));
   hizYazi(); komsulariHazirla(0);
 
@@ -553,17 +557,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   for (const o of ['touchend', 'touchcancel']) liste.addEventListener(o, () => { parmakta = false; kayBitir(); }, { passive: true });
   const KAY_ESIK = 30;   // px: aktif karttan bu kadar sapmadan kapaklar açılmaz (küçük sürüklemede video yerinde kalır, kapak gelip gitmez; Kağan 2026-11-03)
   new MutationObserver((ls) => { for (const m of ls) { const t = m.target; if (!iz || !t.classList || !t.classList.contains('kv-oyna') || t.hidden) continue; if (parmakta || liste.classList.contains('kay')) iz.oynaSurukle++; if (!kullaniciDurdu) iz.oynaYanlis++; } }).observe(liste, { subtree: true, attributes: true, attributeFilter: ['hidden'] });   // ölçüm: ▶ simgesi kullanıcı durdurmadan çıktı mı
-  liste.addEventListener('scroll', () => {
-    if (VV) {
-      const simdi = performance.now(), kayKaldir = () => { if (parmakta || !liste.classList.contains('kay')) return; liste.classList.remove('kay'); if (iz && kayAcAktif === aktif) iz.titreme++; kayAcAktif = -1; if (olc) olc.kk = Math.round(performance.now() - kaySon); olcGoster(aktif); const b = kayBekleyen; kayBekleyen = null; if (b) b(); };   // açıldığı videoda geri kalktıysa: kapak gelip gitti (titreme)
-      const ak = kart(aktif), sap = ak ? Math.abs(liste.scrollTop - ak.offsetTop) : 999;
-      if (sap <= OYNAT_SAP && kayBekleyen) { const b = kayBekleyen; kayBekleyen = null; b(); }   // kart neredeyse oturdu: oynat şimdi (hareket ~50 ms sonra gelir; kapak oturunca kalkar). Parmak/kay durumundan bağımsız: önceki sürümde başlama oturmadan ~300 ms sonra oluyordu
-      if (sap > KAY_ESIK || liste.classList.contains('kay')) {
-        kaySon = simdi; if (!liste.classList.contains('kay')) { liste.classList.add('kay'); kayAcAktif = aktif; if (iz) iz.kayAc++; } clearTimeout(kayT);
-        if (sap < 2) kayKaldir();   // kart tam oturdu: kapak HEMEN kalkar (eskiden son kaydırma olayından 160 ms sonra: video hazır olsa da kapak görünüyordu, Kağan'ın hissettiği gecikme)
-        else kayT = setTimeout(kayKaldir, 80);
-      } else if (iz && sap >= 2) iz.kucukEngel++;
-    }   // kaydırırken yerel video yerinde kalır: kapaklar görünür, durunca yeniden açılır
+  (VV ? window : liste).addEventListener('scroll', () => {
     if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); if (liste.querySelector('.kv-kelpanel:not([hidden])')) { liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; } }, { passive: true });
   // ——— basılı tut = 2x (TikTok/Instagram gibi), bırakınca eski hıza dön ———
   liste.addEventListener('pointerdown', (ev) => {
@@ -601,7 +595,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
 
   return () => {
     sayac++; clearInterval(izleyici); gozlemci?.disconnect(); document.body.classList.remove('video-tam');
-    if (VV) { if (nativEl) nativEl.oldu = true; nativEl = null; removeEventListener('resize', nativKonum); document.documentElement.classList.remove('nativ-video'); VV.kapat().catch(() => {}); }
+    if (VV) { if (nativEl) nativEl.oldu = true; nativEl = null; removeEventListener('resize', nativKonum); document.documentElement.classList.remove('nativ-video'); scrollTo(0, 0); VV.kapat().catch(() => {}); }
     liste.querySelectorAll('video').forEach((el) => { try { el.pause(); } catch { /* yok */ } el.removeAttribute('src'); el.load(); });
     DEPO.hedefler = () => (DEPO.sira ? DEPO.sira.slice(0, 2) : []);
   };
