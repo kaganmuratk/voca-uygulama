@@ -1150,6 +1150,7 @@ html.nativ-video, html.nativ-video body, html.nativ-video main { background: tra
 html.nativ-video { overflow-y: auto; scroll-snap-type: y mandatory; --kart-h: calc(100dvh - var(--alt-h) - env(safe-area-inset-bottom)); }
 html.nativ-video body.video-tam { overflow: visible; min-height: 0; }
 html.nativ-video .kv.nativ { position: relative; inset: auto; left: auto; right: auto; top: auto; bottom: auto; width: auto; height: auto; transform: none; border-radius: 0; overflow: visible; z-index: 5; }
+html.nativ-video .kv.nativ { padding-bottom: calc(var(--alt-h) + env(safe-area-inset-bottom)); }   /* alt menü kartların üstünde durur: belge sonu bu kadar uzar, yoksa son kartın tepesine kaydırılamaz */
 html.nativ-video .kv.nativ .kv-liste { height: auto; overflow: visible; scroll-snap-type: none; }
 html.nativ-video .kv.nativ .kv-kart { height: var(--kart-h); }
 html.nativ-video .kv.nativ .kv-sekme, html.nativ-video .kv.nativ .kv-link { position: fixed; }

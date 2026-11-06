@@ -324,6 +324,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             wv.isOpaque = false
             wv.backgroundColor = .clear
             wv.scrollView.backgroundColor = .clear
+            wv.scrollView.showsVerticalScrollIndicator = false   // belge kaydırıcı oldu: yan kaydırma çubuğu görünmesin
             self.sayfaY0 = y0; self.sayfaW = w; self.sayfaH = h
             self.sayfa = [:]
             for (i, s) in srcs.enumerated() { self.sayfa[s] = i }
@@ -364,6 +365,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             self.beklenenOynuyor = false
             self.oynatici?.isHidden = true
             self.oynatici?.removeFromSuperview()
+            self.bridge?.webView?.scrollView.showsVerticalScrollIndicator = true
             self.sayfa = [:]
             call.resolve()
         }
