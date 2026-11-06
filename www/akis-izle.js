@@ -2,7 +2,7 @@
 // Kişisel veri yok: rastgele cihaz kodu, kod sürümü, video kimliği, ms değerleri, karar. Ortak saat = epoch ms (JS Date.now, Swift Date().timeIntervalSince1970).
 import { SITE, PAKET } from './ortam.js';
 
-export const KOD = 'v102';
+export const KOD = 'v103';
 const cihaz = (() => {
   try { let c = localStorage.getItem('voca-izle-cihaz'); if (!c) { c = Math.random().toString(36).slice(2, 10); localStorage.setItem('voca-izle-cihaz', c); } return c; } catch { return 'x' + Math.random().toString(36).slice(2, 8); }
 })();
@@ -24,6 +24,7 @@ export function karar(k) {
   if (a === false) kalan.push('hareket' + hareket);
   if (b === false) kalan.push('donuk' + donuk);
   if (sicrama === false) kalan.push('sicrama' + k.kapakT);
+  if (k.ct != null && k.ct > 0.15) kalan.push('ilkkareEski' + k.ct);   // ilk kare bildirilirken oynatıcı başta değildi (seek bitmeden)
   if (!c) kalan.push('titreme' + k.titreme);
   if (!d) kalan.push('oyna' + k.oynaYanlis);
   return { hareket, donuk, parca, a, b, c, d, gecti: kalan.length === 0 && a !== null, sebep: kalan.join(',') };

@@ -94,7 +94,7 @@ export async function akisOnYukle() {
   try {
     if (!DEPO.sira) { const l = await jsonAl('/akis-kendi.json'); if (!Array.isArray(l) || !l.length) return; await onbHazir; DEPO.sira = onbOnce(await KS.sirala(l).catch(() => sirala(l))); }
     DEPO.hedefler = () => DEPO.sira.slice(0, 2);
-    if (VV) DEPO.sira.slice(0, 4).forEach((v, k) => { if (!gomulu(v)) VV.onceden({ src: mutlak(v.mp4), hazir: k < 3 }).catch(() => {}); });   // açılışta ilk 4 sunucu videosu telefona inmeye başlar
+    if (VV) DEPO.sira.slice(0, 4).forEach((v, k) => { if (!gomulu(v) || k === 0) VV.onceden({ src: gomulu(v) ? v.mp4 : mutlak(v.mp4), hazir: k < 3 }).catch(() => {}); });   // açılışta ilk 4 sunucu videosu telefona inmeye başlar
     await isci();   // gömülü videolar doğrudan açılır (isci onları atlar); sunucudaki videolar önden inip kalıcı önbelleğe yazılır
   } catch { /* ısınma isteğe bağlı */ }
 }
@@ -321,7 +321,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     return o;
   }
   if (VV) {
-    VV.addListener('ilkKare', (e) => { if (olc && e) { olc.nat = e.ms; olc.hv = e.hv ? 1 : 0; olc.kp = e.kopru; olc.yol = e.yol; olc.hp = e.hp; } if (iz && e) { iz.ilkKareEp = e.ep || Date.now(); iz.hv = e.hv ? 1 : 0; iz.kp = e.kopru; iz.yol = e.yol; } const nv = nativEl, bn0 = sayac; setTimeout(() => { if (nv === nativEl && bn0 === sayac) nv.hazir(); }, HAREKET_YEDEK); setTimeout(() => VV.tani().then((x) => { if (olc) { olc.tn = `ses: ${x.muted ? 'SESSİZ' : 'açık'} v${x.vol} iz${x.izler} ${x.kategori} çıkış${(x.cikti * 100) | 0}% ${x.rota}${x.diger ? ' diğerçalıyor' : ''}`; olcGoster(aktif); } }).catch(() => {}), 700); });
+    VV.addListener('ilkKare', (e) => { if (olc && e) { olc.nat = e.ms; olc.hv = e.hv ? 1 : 0; olc.kp = e.kopru; olc.yol = e.yol; olc.hp = e.hp; } if (iz && e) { iz.ilkKareEp = e.ep || Date.now(); iz.hv = e.hv ? 1 : 0; iz.ct = e.ct; iz.kp = e.kopru; iz.yol = e.yol; } const nv = nativEl, bn0 = sayac; setTimeout(() => { if (nv === nativEl && bn0 === sayac) nv.hazir(); }, HAREKET_YEDEK); setTimeout(() => VV.tani().then((x) => { if (olc) { olc.tn = `ses: ${x.muted ? 'SESSİZ' : 'açık'} v${x.vol} iz${x.izler} ${x.kategori} çıkış${(x.cikti * 100) | 0}% ${x.rota}${x.diger ? ' diğerçalıyor' : ''}`; olcGoster(aktif); } }).catch(() => {}), 700); });
     VV.addListener('hareket', (e) => { if (olc && olc.hr === undefined) { olc.hr = e.ms; olcGoster(aktif); } if (iz && !iz.hareketEp) iz.hareketEp = (e && e.ep) || Date.now(); if (iz && e) { iz.tcEp = e.tc || 0; iz.tpEp = e.tp || 0; iz.bt = e.bt || null; } nativEl?.hazir(); });   // kapak ilk HAREKETle kalkar (ilk kare çözülmüş ama oynamıyorsa ~200 ms donuk 0. kare görünürdü, Kağan 2026-11-03)
     VV.addListener('zaman', (e) => { nativEl?.zaman(e.t, e.d); });
   }

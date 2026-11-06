@@ -39,6 +39,9 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         var sinirG: Any?
         var tcG: NSKeyValueObservation?
         var prerollDurum = 0   // 0: yok, 1: başladı, 2: bitti (başarılı), 3: başarısız/iptal
+        var seekSurer = false   // başa sarma sürüyor: currentTime hedefi (0) gösterir ama katman/kod çözücü hâlâ eski konumda (v102: kapakT 2,828 ve eski kare)
+        var seekSayac = 0
+        var seekBekleyen: (() -> Void)?
     }
     private let yuvaSayisi = 4   // şu anki + önceki + sıradaki 2
     private var yuvalar: [Yuva] = []
@@ -53,13 +56,31 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
     private var istenenSessiz = true   // JS'in istediği ses durumu; oynatma sessiz başlar, ilk hareketten sonra bu uygulanır (ses motoru ayağa kalkarken başlangıç ~200 ms gecikiyordu, şüphe: ölçülecek)
     private var baslatTani: [String: Any] = [:]   // ölçüm: oynat anında yuvanın durumu (preroll bitti mi, kare hazır mı, tampon, başlatma yöntemi)
     private var tCagri = 0, tPlaying = 0, sesliBasladi = false   // ölçüm (epoch ms): playImmediately çağrısı, timeControlStatus .playing olduğu an
+    // yuvayı başa sarar; bitene dek seekSurer açık kalır (hazır sayılmaz), bitince preroll yenilenir ya da bekleyen başlatma çalışır
+    private func basaSar(_ y: Yuva) {
+        y.seekSurer = true; y.prerollDurum = 0
+        y.seekSayac += 1
+        let sn = y.seekSayac
+        y.player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { [weak y] _ in
+            DispatchQueue.main.async {
+                guard let y = y, y.seekSayac == sn else { return }
+                y.seekSurer = false
+                if let bek = y.seekBekleyen { y.seekBekleyen = nil; bek(); return }
+                if y.player.currentItem?.status == .readyToPlay && y.player.rate == 0 {
+                    y.prerollDurum = 1
+                    y.player.preroll(atRate: 1) { [weak y] ok in DispatchQueue.main.async { if let y = y, !y.seekSurer { y.prerollDurum = ok ? 2 : 3 } } }
+                }
+            }
+        }
+    }
+
     private func simdiEp() -> Int { Int(Date().timeIntervalSince1970 * 1000) }
     private var sonHavuz = ""   // tanı: oynatma anında yuvalarda hangi videolar vardı
     private var sonHazirdi = false, sonKopru = 0   // tanı: son oynatma havuzdan mı geldi, JS çağrısı yerel tarafa kaç ms'de ulaştı
 
     private func ilkKareBildir(_ yol: String) {
         ilkKareGonderildi = true
-        notifyListeners("ilkKare", data: ["ms": Int(Date().timeIntervalSince(baslangic) * 1000), "hv": sonHazirdi, "kopru": sonKopru, "yol": yol, "hp": sonHavuz, "ep": Int(Date().timeIntervalSince1970 * 1000)])
+        notifyListeners("ilkKare", data: ["ct": (aktif.player.currentTime().seconds * 1000).rounded() / 1000, "ms": Int(Date().timeIntervalSince(baslangic) * 1000), "hv": sonHazirdi, "kopru": sonKopru, "yol": yol, "hp": sonHavuz, "ep": Int(Date().timeIntervalSince1970 * 1000)])
     }
 
     // video gerçekten ilerlemeye başladığı an (JS kapağı ilk kare değil bu olayla kaldırır: ilk kare ~30 ms, hareket ~220 ms'de geliyordu, arada donuk 0. kare görünüyordu)
@@ -79,7 +100,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             y.player.isMuted = true
             y.player.actionAtItemEnd = .none
             y.zamanG = y.player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.05, preferredTimescale: 600), queue: .main) { [weak self, weak y] t in
-                guard let self = self, let y = y, y === self.aktif, y.player.currentItem != nil else { return }
+                guard let self = self, let y = y, y === self.aktif, y.player.currentItem != nil, !y.seekSurer else { return }
                 let d = y.player.currentItem?.duration.seconds ?? 0
                 if !self.ilkKareGonderildi, y.player.timeControlStatus == .playing, t.seconds > 0.04 {   // isReadyForDisplay yeni videoda değişmezse "ilk kare" hiç gelmezdi (kapak videonun üstünde kalıp donuk görünürdü): oynatma ilerliyorsa kare çizilmiştir
                     self.ilkKareBildir("zaman")
@@ -346,7 +367,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             self.beklenenOynuyor = true
             if onceki !== yeni {
                 onceki.player.pause(); onceki.player.isMuted = true
-                onceki.player.seek(to: .zero)   // geri kaydırınca da hazır beklesin
+                self.basaSar(onceki)   // geri kaydırınca da hazır beklesin
             }
             yeni.damga = Date()
             self.aktif = yeni
@@ -355,8 +376,9 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
             yeni.player.isMuted = true
             self.katmanGorunur(yeni)
             let it = yeni.player.currentItem
-            let prOk = yeni.prerollDurum == 2 && yeni.player.currentTime().seconds < 0.05
-            self.baslatTani = ["pr": yeni.prerollDurum, "rd": yeni.katman?.isReadyForDisplay ?? false, "lk": it?.isPlaybackLikelyToKeepUp ?? false, "ld": it?.loadedTimeRanges.first.map { $0.timeRangeValue.duration.seconds } ?? 0, "hz": hazirdi, "yontem": prOk ? "saat" : "hemen"]
+            let sarGerek = hazirdi && (yeni.seekSurer || yeni.player.currentTime().seconds > 0.05)
+            let prOk = yeni.prerollDurum == 2 && !sarGerek && yeni.player.currentTime().seconds < 0.05
+            self.baslatTani = ["pr": yeni.prerollDurum, "rd": yeni.katman?.isReadyForDisplay ?? false, "lk": it?.isPlaybackLikelyToKeepUp ?? false, "ld": it?.loadedTimeRanges.first.map { $0.timeRangeValue.duration.seconds } ?? 0, "hz": hazirdi, "sk": sarGerek, "ct0": (yeni.player.currentTime().seconds * 1000).rounded() / 1000, "yontem": prOk ? "saat" : "hemen"]
             let baslat = {
                 self.tCagri = self.simdiEp()
                 if prOk {   // preroll bitmiş yuva: saate sabitlenmiş başlatma (playImmediately kod çözücü/saati yeniden kurabiliyor, şüphe: ölçülecek)
@@ -364,13 +386,14 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
                     yeni.player.setRate(self.hiz, time: .invalid, atHostTime: CMTimeAdd(su, CMTime(seconds: 0.02, preferredTimescale: 1000)))
                 } else { yeni.player.playImmediately(atRate: self.hiz) }
             }
-            if hazirdi && yeni.player.currentTime().seconds > 0.05 {
-                yeni.player.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { _ in DispatchQueue.main.async { baslat() } }
+            if sarGerek {   // sarma bitmeden başlatma yok: eski kare/konum görünmesin
+                if !yeni.seekSurer { self.basaSar(yeni) }
+                yeni.seekBekleyen = { baslat() }
             } else { baslat() }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {   // saatli başlatma sessizce başarısız olursa video donmasın
-                if self.aktif === yeni, self.beklenenOynuyor, yeni.player.rate == 0 { yeni.player.playImmediately(atRate: self.hiz) }
+                if self.aktif === yeni, self.beklenenOynuyor, !yeni.seekSurer, yeni.player.rate == 0 { yeni.player.playImmediately(atRate: self.hiz) }
             }
-            if hazirdi, yeni.katman?.isReadyForDisplay == true {   // kare zaten çözülmüş: KVO yeniden tetiklenmez, ilk kare hemen
+            if hazirdi, !sarGerek, yeni.katman?.isReadyForDisplay == true {   // kare zaten çözülmüş: KVO yeniden tetiklenmez, ilk kare hemen
                 self.ilkKareBildir("hazir")
             }
             let sirada = self.bekleyen; self.bekleyen = []
@@ -391,7 +414,7 @@ public class VocaVideoPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             self.beklenenOynuyor = false
             self.player.pause()
-            self.player.seek(to: .zero)
+            self.basaSar(self.aktif)
             call.resolve()
         }
     }
