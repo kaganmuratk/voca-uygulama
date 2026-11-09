@@ -35,7 +35,7 @@ const HESAP_KEY = 'voca-hesap-karar';
 const hesapOku = () => { try { return JSON.parse(localStorage.getItem(HESAP_KEY) || '{}') || {}; } catch { return {}; } };
 export const hesapDurum = (h) => (h ? hesapOku()[h] || '' : '');   // '', 'takip', 'istemiyorum' (eşzamanlı okunur: akış kurulurken gerekir)
 export async function hesapAyarla(h, durum) {
-  const m = hesapOku(); if (durum) m[h] = durum; else delete m[h];
+  const m = hesapOku(); m[h] = durum || '';   // boş = kaldırıldı (silmek değil: sunucudaki eski karar geri gelmesin)
   try { localStorage.setItem(HESAP_KEY, JSON.stringify(m)); } catch { /* depolama kapalı */ }
   const d = await sinyalYukle(); d.hesap = { ...m }; kaydet();   // profil senkronuna da gider
 }
