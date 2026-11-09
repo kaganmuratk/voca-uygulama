@@ -276,7 +276,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   };
   const sozlukKapat = () => {
     liste.querySelectorAll('.kv-sozluk').forEach((x) => { x.hidden = true; });
-    liste.querySelectorAll('.kv-satir .secik').forEach((x) => x.classList.remove('secik'));
+    liste.querySelectorAll('.kv-satir .secik, .kv-transpanel .secik').forEach((x) => x.classList.remove('secik'));
   };
   let izSn = 0, dongu = 0, oncekiT = 0;   // etkin videoda gerçekten izlenen süre ve tekrar sayısı (kişisel keşfet sinyali)
   const tik = () => {
@@ -291,6 +291,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     let su = null; p.querySelectorAll('.sozcuk').forEach((x) => { if (+x.dataset.t <= t + 0.05) su = x; });
     p.querySelectorAll('.su-an').forEach((x) => { if (x !== su) x.classList.remove('su-an'); });
     su?.classList.add('su-an');
+    panelIz(false);
   };
 
   // ——— yerel oynatıcı taklidi: <video> gibi davranır (oynat/duraklat/ses/hız/zaman), asıl iş eklentide ———
@@ -357,14 +358,29 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   let panelDevam = false;
   const transKapat = () => { const p = kart(aktif)?.querySelector('.kv-transpanel'); if (p) p.hidden = true; if (transDevam && !kullaniciDurdu) vid(aktif)?.play().catch(() => {}); transDevam = false; };
   let transDevam = false;
-  async function transAc(k, v) {   // konuşmanın tam metni; kelimelere dokununca sözlük açılır
-    const p = k.querySelector('.kv-transpanel'), el = vid(aktif);
+  async function transAc(k, v) {   // konuşmanın tam metni: video DURMADAN akar, konuşulan kelime altyazıdaki gibi vurgulanır; kelimeye dokununca sözlük açılır
+    const p = k.querySelector('.kv-transpanel');
     if (!p.hidden) return transKapat();
-    sozlukKapat(); transDevam = !!el && !el.paused; try { el?.pause(); } catch { /* yok */ }
+    sozlukKapat(); transDevam = false;
     const d = await altyaziAl(v.id);
-    const par = (d?.satirlar || []).map((s) => s.k.map(([w]) => `<button class="sozcuk" type="button" data-s="${e(w)}">${e(w)}</button>`).join(' ')).join(' ');
-    p.innerHTML = `<div class="kp-bas"><b>Konuşma metni</b><button class="tp-kapat" type="button" aria-label="Kapat">×</button></div>` + (par ? `<p class="tp-metin">${par}</p>` : '<p class="kp-bos">Metin yok.</p>');
-    p.hidden = false;
+    const sozler = (d?.satirlar || []).flatMap((s) => s.k);
+    const paragraflar = []; let cur = [];
+    for (const [w, t] of sozler) { cur.push([w, t]); if (/[.!?…]["”’')\]]*$/.test(w) || cur.length >= 40) { paragraflar.push(cur); cur = []; } }
+    if (cur.length) paragraflar.push(cur);
+    const par = paragraflar.map((pr) => `<p class="tp-par">${pr.map(([w, t]) => `<button class="sozcuk" type="button" data-s="${e(w)}" data-t="${t}">${e(w)}</button>`).join(' ')}</p>`).join('');
+    p.innerHTML = `<div class="kp-bas"><b>Konuşma metni</b><button class="tp-kapat" type="button" aria-label="Kapat">×</button></div>` + (par ? `<div class="tp-metin">${par}</div>` : '<p class="kp-bos">Metin yok.</p>');
+    p.hidden = false; panelIz(true);
+  }
+  let panelSon = null;
+  function panelIz(zorla) {   // paneldeki konuşulan kelimeyi vurgula, görünür tut (altyazıdaki su-an ile aynı mantık)
+    const p = kart(aktif)?.querySelector('.kv-transpanel'), el = vid(aktif); if (!p || p.hidden || !el) return;
+    const t = el.currentTime; let su = null;
+    p.querySelectorAll('.tp-metin .sozcuk').forEach((x) => { if (+x.dataset.t <= t + 0.05) su = x; });
+    if (su === panelSon && !zorla) return; panelSon = su;
+    p.querySelectorAll('.su-an').forEach((x) => { if (x !== su) x.classList.remove('su-an'); });
+    if (!su) return; su.classList.add('su-an');
+    const pr = su.getBoundingClientRect(), kr = p.getBoundingClientRect();
+    if (pr.top < kr.top + 60 || pr.bottom > kr.bottom - 24) p.scrollTo({ top: p.scrollTop + (pr.top - kr.top) - kr.height / 2, behavior: 'smooth' });
   }
   function hesapKarar(i, k, durumAd) {
     const h = k.dataset.hesap; if (!h) return;
