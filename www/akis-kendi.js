@@ -371,14 +371,16 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     let kh = '32'; try { kh = localStorage.getItem('voca-tp-h') || '32'; } catch { /* yok */ }
     p.style.height = kh + '%';
     p.innerHTML = `<div class="tp-tutacak" aria-label="Yüksekliği ayarla"><i></i></div><div class="kp-bas"><b>Konuşma metni</b><button class="tp-kapat" type="button" aria-label="Kapat">×</button></div>` + (par ? `<div class="tp-metin">${par}</div>` : '<p class="kp-bos">Metin yok.</p>');
-    p.hidden = false; panelIz(true);
+    panelElle = false; p.hidden = false; panelIz(true);
   }
   { let surukle = null;   // panelin üstündeki tutacaktan sürükle: yükseklik %15-%70, hatırlanır
     liste.addEventListener('pointerdown', (ev) => { const t = ev.target.closest('.tp-tutacak'); if (!t) return; const p = t.closest('.kv-transpanel'); surukle = { p, kr: p.parentElement.getBoundingClientRect() }; try { t.setPointerCapture(ev.pointerId); } catch { /* yok */ } ev.preventDefault(); });
     liste.addEventListener('pointermove', (ev) => { if (!surukle) return; const y = Math.round(Math.min(70, Math.max(15, (surukle.kr.bottom - ev.clientY) / surukle.kr.height * 100))); surukle.p.style.height = y + '%'; surukle.son = y; });
     const bitir = () => { if (surukle?.son) { try { localStorage.setItem('voca-tp-h', String(surukle.son)); } catch { /* yok */ } } surukle = null; };
     liste.addEventListener('pointerup', bitir); liste.addEventListener('pointercancel', bitir); }
-  let panelSon = null;
+  let panelSon = null, panelElle = false;   // panelElle: kullanıcı kendi kaydırdıysa metin artık otomatik kaymaz
+  liste.addEventListener('touchstart', (ev) => { if (ev.target.closest('.kv-transpanel')) panelElle = true; }, { passive: true });
+  liste.addEventListener('wheel', (ev) => { if (ev.target.closest('.kv-transpanel')) panelElle = true; }, { passive: true });
   function panelIz(zorla) {   // paneldeki konuşulan kelimeyi vurgula, görünür tut (altyazıdaki su-an ile aynı mantık)
     const p = kart(aktif)?.querySelector('.kv-transpanel'), el = vid(aktif); if (!p || p.hidden || !el) return;
     const t = el.currentTime; let su = null;
@@ -387,7 +389,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     p.querySelectorAll('.su-an').forEach((x) => { if (x !== su) x.classList.remove('su-an'); });
     if (!su) return; su.classList.add('su-an');
     const pr = su.getBoundingClientRect(), kr = p.getBoundingClientRect();
-    if (pr.top < kr.top + 60 || pr.bottom > kr.bottom - 24) p.scrollTo({ top: p.scrollTop + (pr.top - kr.top) - kr.height / 2, behavior: 'smooth' });
+    if (!panelElle && (pr.top < kr.top + 60 || pr.bottom > kr.bottom - 24)) p.scrollTo({ top: p.scrollTop + (pr.top - kr.top) - kr.height / 2, behavior: 'smooth' });
   }
   function hesapKarar(i, k, durumAd) {
     const h = k.dataset.hesap; if (!h) return;

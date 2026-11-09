@@ -1185,3 +1185,5 @@ html.nativ-video .kv.nativ .kv-sekme, html.nativ-video .kv.nativ .kv-link { posi
 .kv-transpanel { height: 32%; max-height: 70%; padding-top: 0; }
 .tp-tutacak { position: sticky; top: 0; z-index: 2; display: grid; place-items: center; height: 26px; margin: 0 -16px; background: #0e0e12; border-radius: 18px 18px 0 0; touch-action: none; cursor: ns-resize; }
 .tp-tutacak i { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.35); }
+/* Metin paneli: başlık ve × kaydırınca da yerinde kalır */
+.kv-transpanel .kp-bas { position: sticky; top: 26px; z-index: 2; background: #0e0e12; margin: 0 -16px 8px; padding: 4px 16px 8px; }
