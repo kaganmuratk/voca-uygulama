@@ -1180,3 +1180,8 @@ html.nativ-video .kv.nativ .kv-sekme, html.nativ-video .kv.nativ .kv-link { posi
 .tp-metin .sozcuk { padding: 2px 3px; border-radius: 4px; }
 .tp-metin .sozcuk.su-an { background: rgba(255,255,255,.3); box-shadow: inset 0 -3px 0 #FF6B4A; color: #fff !important; }
 .tp-metin .sozcuk.secik { background: rgba(43,40,245,.85); color: #fff; }
+
+/* Metin paneli: varsayılan %32, üstteki tutacakla %15-%70 arası ayarlanır */
+.kv-transpanel { height: 32%; max-height: 70%; padding-top: 0; }
+.tp-tutacak { position: sticky; top: 0; z-index: 2; display: grid; place-items: center; height: 26px; margin: 0 -16px; background: #0e0e12; border-radius: 18px 18px 0 0; touch-action: none; cursor: ns-resize; }
+.tp-tutacak i { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.35); }
