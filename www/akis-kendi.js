@@ -527,7 +527,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     sesiAc();
     const k = ev.target.closest('.kv-kart'); if (!k) return;
     if (Date.now() - surukleSonu < 350 || Date.now() - basiliSon < 350) { ev.preventDefault(); ev.stopPropagation(); return; }   // sürükleme / basılı tutma (2x) sonrası click yutulur
-    { const tp = k.querySelector('.kv-transpanel'); if (tp && !tp.hidden && ev.target.closest('.tp-kapat')) { transKapat(); return; } if (tp && !tp.hidden && !ev.target.closest('.kv-transpanel, .kv-sozluk, .kv-trans')) { transKapat(); return; } }
+    { const tp = k.querySelector('.kv-transpanel'); if (tp && !tp.hidden && ev.target.closest('.tp-kapat')) { transKapat(); return; } /* dışarı dokunuş paneli KAPATMAZ: video durdurulup başlatılabilsin (Kağan 2026-11-09); yalnız × ya da Metin düğmesi kapatır */ }
    // kelime paneli açıkken ekranın herhangi bir yerine dokunmak kapatır (yalnız × değil)
     const kb = ev.target.closest('.kv-kaydet');
     if (kb) { kaydetDegistir(k.dataset.id, kb); return; }
