@@ -2,7 +2,7 @@
 // Kişisel veri yok: rastgele cihaz kodu, kod sürümü, video kimliği, ms değerleri, karar. Ortak saat = epoch ms (JS Date.now, Swift Date().timeIntervalSince1970).
 import { SITE, PAKET } from './ortam.js';
 
-export const KOD = 'v113';
+export const KOD = 'v114';
 const cihaz = (() => {
   try { let c = localStorage.getItem('voca-izle-cihaz'); if (!c) { c = Math.random().toString(36).slice(2, 10); localStorage.setItem('voca-izle-cihaz', c); } return c; } catch { return 'x' + Math.random().toString(36).slice(2, 8); }
 })();

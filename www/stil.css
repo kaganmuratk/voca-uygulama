@@ -1187,3 +1187,9 @@ html.nativ-video .kv.nativ .kv-sekme, html.nativ-video .kv.nativ .kv-link { posi
 .tp-tutacak i { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.35); }
 /* Metin paneli: başlık ve × kaydırınca da yerinde kalır */
 .kv-transpanel .kp-bas { position: sticky; top: 26px; z-index: 2; background: #0e0e12; margin: 0 -16px 8px; padding: 4px 16px 8px; }
+/* Video sekmesinde alt çubuk koyu (beyaz fazla kaçıyordu, Kağan 2026-11-09) */
+body[data-sayfa="video"] .alt-nav { background: #0e0e12; backdrop-filter: none; border-top: 1px solid rgba(255,255,255,.08); }
+body[data-sayfa="video"] .alt-nav a { color: rgba(255,255,255,.55); }
+body[data-sayfa="video"] .alt-nav a.aktif { color: #fff; }
+body[data-sayfa="video"] .alt-nav a.aktif svg { stroke: #fff; }
+body[data-sayfa="video"] .alt-nav a.aktif::after { background: #fff; }

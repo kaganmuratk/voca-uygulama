@@ -68,7 +68,11 @@ export async function sirala(liste, { set } = {}) {
     if (v.hesap && hesapDurum(v.hesap) === 'takip') p += 4;       // takip ettiğin hesaplar öne                              // beğendiğin videoların 'benzer' bağlantıları
     return [v.id, p + Math.random() * 1.5];
   }));
-  const kalan = [...liste], sonuc = [];
+  // görülme katmanları: hiç görülmeyenler HER ZAMAN önce, sonra az görülenler (puan yalnız aynı katman içinde sıralar) — aynı video, görülmemiş varken karşına çıkmaz; uygulamayı kapatıp açınca da (görülenler yerelde kalıcı)
+  const katmanlar = [...new Set(liste.map((v) => d.gor[v.id] || 0))].sort((a, b) => a - b).map((n) => liste.filter((v) => (d.gor[v.id] || 0) === n));
+  const sonuc = [];
+  for (const katman of katmanlar) {
+  const kalan = [...katman];
   while (kalan.length) {
     const son = sonuc[sonuc.length - 1], onceki = sonuc[sonuc.length - 2];
     const son4 = sonuc.slice(-4);   // aynı genel ilgi son 4 videoda en çok 2 kez: akış tek konuya kilitlenmez
@@ -81,6 +85,7 @@ export async function sirala(liste, { set } = {}) {
       secim = kesif[Math.floor(Math.random() * kesif.length)];
     } else secim = havuz.reduce((a, b) => (puan.get(b.id) > puan.get(a.id) ? b : a));
     sonuc.push(secim); kalan.splice(kalan.indexOf(secim), 1);
+  }
   }
   return sonuc;
 }

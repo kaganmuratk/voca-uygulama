@@ -474,7 +474,6 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     const onceki = aktif;
     if (onceki >= 0 && videolar[onceki]) {   // ayrılan videonun sinyali: hızlı geçme / tam izleme / tekrar
       const ov = videolar[onceki], elO = vid(onceki), sure = (elO && elO.duration) || ov.sure || 20, oran = izSn / sure;
-      KS.goruldu(ov);
       if (izSn < 3) KS.olay(ov, 'hizli'); else if (oran >= 0.8) KS.olay(ov, 'tam');
       if (dongu >= 1) KS.olay(ov, 'tekrar');
     }
@@ -483,7 +482,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } setTimeout(() => { if (vid(aktif) !== o) { try { o.currentTime = 0; } catch { /* yok */ } kart(onceki)?.classList.remove('goster'); } }, 450); } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
     clearInterval(izleyici); sozlukKapat(); liste.querySelectorAll('.kv-transpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; transDevam = false; basili = false; satirlar = []; sira = -1; kullaniciDurdu = false;
     if (VV) { if (nativEl) nativEl.oldu = true; nativEl = yeniNativ(videolar[i]); }
-    aktif = i; const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
+    aktif = i; KS.goruldu(videolar[i]); const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
     if (!k || !el) return;
     durum(i, ''); gecisT0 = performance.now();
     iz = { vid: v.id, nativ: VV ? 1 : 0, t0: Date.now(), oynatEp: 0, ilkKareEp: 0, hareketEp: 0, kapakEp: 0, kayAc: 0, titreme: 0, kucukEngel: 0, oynaYanlis: 0, oynaSurukle: 0, parmak: 0 };
