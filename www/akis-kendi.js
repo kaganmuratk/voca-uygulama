@@ -189,7 +189,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
 
   const SAKLA_ONCE = 0, SAKLA_SONRA = 1;   // iPhone aynı anda az video çözücü verir: yalnız oynayan + sıradaki video kaynağı bağlı (diğerleri blob olarak bellekte)
   liste.innerHTML = videolar.map((v) => `
-    <article class="kv-kart" data-id="${v.id}">
+    <article class="kv-kart" data-id="${v.id}" data-hesap="${e(v.hesap || '')}">
       <div class="kv-sahne">
         <img class="kv-kapak" ${VV && !gomulu(v) ? '' : `src="${e(gomulu(v) ? v.kapak : mutlak(v.kapak))}"`} alt="" decoding="async" draggable="false">
         <video class="kv-vid" playsinline webkit-playsinline muted loop preload="none" disablepictureinpicture></video>
@@ -200,12 +200,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
         <div class="kv-yan">
           <button class="kv-dugme kv-kaydet" type="button" aria-label="Kaydet" aria-pressed="false"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg><span>Kaydet</span></button>
           <button class="kv-dugme kv-hiz" type="button" aria-label="Hız"><b>1x</b><span>Hız</span></button>
-          <button class="kv-dugme kv-kel" type="button" aria-label="Videodaki kelimeler"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M4 6h16M4 12h10M4 18h16"/></svg><span>Kelimeler</span></button>
+          ${true ? `<button class="kv-dugme kv-trans" type="button" aria-label="Konuşma metni"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M5 4h14v12H9l-4 4z"/></svg><span>Metin</span></button>` : ''}
           <button class="kv-dugme kv-paylas" type="button" aria-label="Paylaş"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></svg><span>Paylaş</span></button>
           <button class="kv-dugme kv-ilgisiz" type="button" aria-label="İlgilenmiyorum"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg><span>İlgisiz</span></button>
         </div>
         <div class="kv-hizrozet" hidden>2x ▸▸</div>
-        <div class="kv-kelpanel" hidden></div>
+        <div class="kv-transpanel" hidden></div>
+        ${v.hesap ? `<div class="kv-hesap"><a class="kh-ig" href="https://www.instagram.com/${e(v.hesap)}/" target="_blank" rel="noopener">@${e(v.hesap)} ↗</a><button class="kh-takip" type="button">${KS.hesapDurum(v.hesap) === 'takip' ? 'Takipte ✓' : 'Takip et'}</button><button class="kh-yok" type="button">İstemiyorum</button></div>` : ''}
         <div class="kv-ipucu" hidden></div>
         <div class="kv-altyazi"><p class="kv-satir" aria-live="off"></p><span class="kv-satir kv-olc" aria-hidden="true"></span></div>
         <div class="kv-sozluk" hidden></div>
@@ -354,21 +355,28 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     } catch { /* kullanıcı iptal etti */ }
   }
   let panelDevam = false;
-  function kelPaneliKapat() { const p = kart(aktif)?.querySelector('.kv-kelpanel'); if (p) p.hidden = true; if (panelDevam && !kullaniciDurdu) vid(aktif)?.play().catch(() => {}); panelDevam = false; }
-  async function kelPaneliAc(k, v) {   // videodaki öğrenmeye değer kelimeler: kelime + seviye + ilk anlam + ekle
-    const p = k.querySelector('.kv-kelpanel'), el = vid(aktif);
-    if (!p.hidden) return kelPaneliKapat();
-    sozlukKapat(); panelDevam = !!el && !el.paused; try { el?.pause(); } catch { /* yok */ }
-    const d = await altyaziAl(v.id), gor = new Set(), satir = [];
-    for (const s of (d?.satirlar || [])) s.k.forEach(([w], j) => {
-      if (!ogrenmeyeDeger(w, j === 0)) return;
-      const kk = kokBul(w.replace(/[^\w'’-]/g, ''), dizin || []); if (!kk || gor.has(kk.k)) return;
-      gor.add(kk.k); satir.push(kk);
-    });
-    p.innerHTML = `<div class="kp-bas"><b>Bu videodaki kelimeler</b><button class="kp-kapat" type="button" aria-label="Kapat">×</button></div>` + (satir.length
-      ? `<ul>${satir.slice(0, 40).map((x) => `<li><div><b>${e(x.k)}</b>${x.s ? ` <span class="seviye">${x.s}</span>` : ''}<br><i>${e((x.an?.[0]?.[1]) || x.tr || '')}</i></div><button class="kp-ekle" type="button" data-ekle="${e(x.k)}" aria-label="Listeme ekle">+</button></li>`).join('')}</ul>`
-      : '<p class="kp-bos">Bu videoda sözlüğümüzden öğrenmeye değer kelime bulamadım.</p>');
+  const transKapat = () => { const p = kart(aktif)?.querySelector('.kv-transpanel'); if (p) p.hidden = true; if (transDevam && !kullaniciDurdu) vid(aktif)?.play().catch(() => {}); transDevam = false; };
+  let transDevam = false;
+  async function transAc(k, v) {   // konuşmanın tam metni; kelimelere dokununca sözlük açılır
+    const p = k.querySelector('.kv-transpanel'), el = vid(aktif);
+    if (!p.hidden) return transKapat();
+    sozlukKapat(); transDevam = !!el && !el.paused; try { el?.pause(); } catch { /* yok */ }
+    const d = await altyaziAl(v.id);
+    const par = (d?.satirlar || []).map((s) => s.k.map(([w]) => `<button class="sozcuk" type="button" data-s="${e(w)}">${e(w)}</button>`).join(' ')).join(' ');
+    p.innerHTML = `<div class="kp-bas"><b>Konuşma metni</b><button class="tp-kapat" type="button" aria-label="Kapat">×</button></div>` + (par ? `<p class="tp-metin">${par}</p>` : '<p class="kp-bos">Metin yok.</p>');
     p.hidden = false;
+  }
+  function hesapKarar(i, k, durumAd) {
+    const h = k.dataset.hesap; if (!h) return;
+    const yeni = durumAd === 'takip' && KS.hesapDurum(h) === 'takip' ? '' : durumAd;
+    KS.hesapAyarla(h, yeni);
+    if (yeni === 'istemiyorum') {
+      liste.querySelectorAll('.kv-kart').forEach((c) => { if (c.dataset.hesap === h) c.classList.add('ilgisiz-gecti'); });
+      durum(i, `@${h} bir daha gösterilmeyecek.`); const bn = sayac; setTimeout(() => { if (bn === sayac) durum(aktif, ''); }, 1800);
+      setTimeout(() => { kart(i + 1)?.scrollIntoView({ behavior: 'smooth' }); }, 450);
+    } else {
+      liste.querySelectorAll('.kv-kart').forEach((c) => { if (c.dataset.hesap === h) { const b = c.querySelector('.kh-takip'); if (b) b.textContent = yeni === 'takip' ? 'Takipte ✓' : 'Takip et'; } });
+    }
   }
   function yenidenYukle(el) {   // takılmış video öğesi: kaynağı söküp yeniden bağla (bazen iOS çözücüsü ilk bağlamada takılıyor)
     const u = el.currentSrc || el.src; if (!u) return;
@@ -448,7 +456,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     izBitir();
     izSn = 0; dongu = 0; oncekiT = 0;
     if (onceki >= 0) { const o = vid(onceki); if (o) { try { o.muted = true; o.pause(); } catch { /* yok */ } setTimeout(() => { if (vid(aktif) !== o) { try { o.currentTime = 0; } catch { /* yok */ } kart(onceki)?.classList.remove('goster'); } }, 450); } kart(onceki)?.classList.remove('oynuyor', 'durdu', 'yukleniyor'); const oy = kart(onceki)?.querySelector('.kv-oyna'); if (oy) oy.hidden = true; }
-    clearInterval(izleyici); sozlukKapat(); liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; basili = false; satirlar = []; sira = -1; kullaniciDurdu = false;
+    clearInterval(izleyici); sozlukKapat(); liste.querySelectorAll('.kv-transpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; transDevam = false; basili = false; satirlar = []; sira = -1; kullaniciDurdu = false;
     if (VV) { if (nativEl) nativEl.oldu = true; nativEl = yeniNativ(videolar[i]); }
     aktif = i; const bn = ++sayac; const k = kart(i), el = vid(i), v = videolar[i];
     if (!k || !el) return;
@@ -503,18 +511,20 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     sesiAc();
     const k = ev.target.closest('.kv-kart'); if (!k) return;
     if (Date.now() - surukleSonu < 350 || Date.now() - basiliSon < 350) { ev.preventDefault(); ev.stopPropagation(); return; }   // sürükleme / basılı tutma (2x) sonrası click yutulur
-    { const pa = k.querySelector('.kv-kelpanel'); if (pa && !pa.hidden && !ev.target.closest('.kp-ekle')) { kelPaneliKapat(); return; } }   // kelime paneli açıkken ekranın herhangi bir yerine dokunmak kapatır (yalnız × değil)
+    { const tp = k.querySelector('.kv-transpanel'); if (tp && !tp.hidden && ev.target.closest('.tp-kapat')) { transKapat(); return; } if (tp && !tp.hidden && !ev.target.closest('.kv-transpanel, .kv-sozluk, .kv-trans')) { transKapat(); return; } }
+   // kelime paneli açıkken ekranın herhangi bir yerine dokunmak kapatır (yalnız × değil)
     const kb = ev.target.closest('.kv-kaydet');
     if (kb) { kaydetDegistir(k.dataset.id, kb); return; }
     const i = [...liste.children].indexOf(k), el = vid(i), v = videolar[i];
     if (ev.target.closest('.kv-hiz')) { hiz = HIZLAR[(HIZLAR.indexOf(hiz) + 1) % HIZLAR.length]; try { localStorage.setItem('voca-hiz', String(hiz)); } catch { /* yok */ } hizYazi(); hizUygula(el); return; }
     if (ev.target.closest('.kv-paylas')) { paylas(v); return; }
     if (ev.target.closest('.kv-ilgisiz')) { ilgisizYap(i, v); return; }
-    if (ev.target.closest('.kv-kel')) { if (i === aktif) kelPaneliAc(k, v); return; }
-    if (ev.target.closest('.kp-kapat')) { kelPaneliKapat(); return; }
+    if (ev.target.closest('.kh-ig')) return;
+    if (ev.target.closest('.kh-takip')) { hesapKarar(i, k, 'takip'); return; }
+    if (ev.target.closest('.kh-yok')) { hesapKarar(i, k, 'istemiyorum'); return; }
+    if (ev.target.closest('.kv-trans')) { if (i === aktif) transAc(k, v); return; }
     const ke = ev.target.closest('.kp-ekle');
     if (ke) { if (!girisli()) return girisGerekli(); ekle(ke.dataset.ekle).then(() => { ke.textContent = '✓'; ke.disabled = true; }); return; }
-    if (ev.target.closest('.kv-kelpanel')) return;
     // 'otomatik başlamadı' durumunda HER dokunuş (altyazı kelimesi dahil) yalnızca videoyu başlatır
     if (i === aktif && k.dataset.oto === '1' && el) {
       el.dataset.kullanici = String(sayac); delete k.dataset.oto; kullaniciDurdu = false; k.classList.remove('durdu'); k.querySelector('.kv-oyna').hidden = true; durum(i, '');
@@ -558,7 +568,7 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   const KAY_ESIK = 30;   // px: aktif karttan bu kadar sapmadan kapaklar açılmaz (küçük sürüklemede video yerinde kalır, kapak gelip gitmez; Kağan 2026-11-03)
   new MutationObserver((ls) => { for (const m of ls) { const t = m.target; if (!iz || !t.classList || !t.classList.contains('kv-oyna') || t.hidden) continue; if (parmakta || liste.classList.contains('kay')) iz.oynaSurukle++; if (!kullaniciDurdu) iz.oynaYanlis++; } }).observe(liste, { subtree: true, attributes: true, attributeFilter: ['hidden'] });   // ölçüm: ▶ simgesi kullanıcı durdurmadan çıktı mı
   (VV ? window : liste).addEventListener('scroll', () => {
-    if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); if (liste.querySelector('.kv-kelpanel:not([hidden])')) { liste.querySelectorAll('.kv-kelpanel').forEach((p) => { p.hidden = true; }); panelDevam = false; } }, { passive: true });
+    if (liste.querySelector('.kv-sozluk:not([hidden])')) sozlukKapat(); if (liste.querySelector('.kv-transpanel:not([hidden])')) { liste.querySelectorAll('.kv-transpanel').forEach((p) => { p.hidden = true; }); transDevam = false; } }, { passive: true });
   // ——— basılı tut = 2x (TikTok/Instagram gibi), bırakınca eski hıza dön ———
   liste.addEventListener('pointerdown', (ev) => {
     if (!ev.target.closest('.kv-tap')) return;

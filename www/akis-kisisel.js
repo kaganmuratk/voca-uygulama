@@ -30,6 +30,15 @@ export async function olay(v, tur, katsayi = 1) {   // tur: PUAN anahtarı
   kaydet();
 }
 export async function gizle(v) { const d = await sinyalYukle(); if (!d.gizli.includes(v.id)) d.gizli.push(v.id); kaydet(); }   // 'ilgilenmiyorum' dediklerin akıştan çıkar
+// ——— hesap kararları (Instagram hesapları): 'takip' = yeni içerik çekilsin/akışta öne; 'istemiyorum' = hesabın bütün videoları akıştan kalkar, bir daha çekilmez ———
+const HESAP_KEY = 'voca-hesap-karar';
+const hesapOku = () => { try { return JSON.parse(localStorage.getItem(HESAP_KEY) || '{}') || {}; } catch { return {}; } };
+export const hesapDurum = (h) => (h ? hesapOku()[h] || '' : '');   // '', 'takip', 'istemiyorum' (eşzamanlı okunur: akış kurulurken gerekir)
+export async function hesapAyarla(h, durum) {
+  const m = hesapOku(); if (durum) m[h] = durum; else delete m[h];
+  try { localStorage.setItem(HESAP_KEY, JSON.stringify(m)); } catch { /* depolama kapalı */ }
+  const d = await sinyalYukle(); d.hesap = { ...m }; kaydet();   // profil senkronuna da gider
+}
 export async function goruldu(v) { const d = await sinyalYukle(); d.gor[v.id] = (d.gor[v.id] || 0) + 1; kaydet(); }
 
 // listendeki kelime formları: kelime listesi ('liste:<ad>') yerel kopyadan
@@ -48,13 +57,15 @@ export function eslesenler(v, set) {   // videodaki (sz) kelimelerden listede ol
 
 export async function sirala(liste, { set } = {}) {
   const d = await sinyalYukle(); set = set || await listeKelimeleri();
+  liste = liste.filter((v) => !(v.hesap && hesapDurum(v.hesap) === 'istemiyorum'));   // istemediğin hesaplar her zaman çıkar
   { const kalan0 = liste.filter((v) => !d.gizli.includes(v.id)); if (kalan0.length >= 5) liste = kalan0; }   // gizlenenler çıkar (çok az kalırsa akış boşalmasın)
   const iyiKomsu = new Set(); for (const v of liste) if (d.iyi.includes(v.id)) for (const b of v.benzer || []) iyiKomsu.add(b);
   const puan = new Map(liste.map((v) => {
     let p = etiketler(v).reduce((a, e) => a + (d.w[e] || 0), 0);
     p += Math.min(3, eslesenler(v, set).length) * 2;            // listendeki kelime geçiyor
     p -= (d.gor[v.id] || 0) * 4;                                 // görülmüş videolar sona
-    if (iyiKomsu.has(v.id)) p += 3;                              // beğendiğin videoların 'benzer' bağlantıları
+    if (iyiKomsu.has(v.id)) p += 3;
+    if (v.hesap && hesapDurum(v.hesap) === 'takip') p += 4;       // takip ettiğin hesaplar öne                              // beğendiğin videoların 'benzer' bağlantıları
     return [v.id, p + Math.random() * 1.5];
   }));
   const kalan = [...liste], sonuc = [];
