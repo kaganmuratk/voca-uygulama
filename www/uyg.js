@@ -12,6 +12,8 @@ import { ayarOku as hatAyarOku, ayarYaz as hatAyarYaz, hatirlatmaUygula, hatirla
 import { PAKET, SITE, sunucuAdresi, apiIstek, jetonYaz, jsonAl } from './ortam.js';
 import { videoSayfasi } from './video.js';
 import { kokAdaylari } from './kok.js';
+import { aiKur } from './ai.js';
+import { listeKelimeleri } from './akis-kisisel.js';
 let klipTemizle = () => {};
 const $ = (s, k = document) => k.querySelector(s);
 const $$ = (s, k = document) => [...k.querySelectorAll(s)];
@@ -174,7 +176,7 @@ function vurgula(cumle, kelime) {
 // bütün sayfalar girişsiz görülebilir; işlem yapınca giriş istenir
 const YOLLAR = [
   // web sitesi yalnız sözlük (Kağan 2026-10-18); bu ekranlar uygulamada (uygulamada kural hiç eklenmez, yoksa ilk eşleşme ekranı boş bırakır)
-  ...(UYGULAMA ? [] : [[/^#\/(giris|hesap|liste|pratik|video|gecmis)(\/.*)?$/, () => git('#/ara')]]),
+  ...(UYGULAMA ? [] : [[/^#\/(giris|hesap|liste|pratik|video|gecmis|ai)(\/.*)?$/, () => git('#/ara')]]),
 
   [/^#\/?$/, () => ara()],
   [/^#\/ara$/, () => ara()],
@@ -189,6 +191,7 @@ const YOLLAR = [
   [/^#\/video\/yt$/, akisAc],
   [/^#\/video\/ac\/([\w-]{11})$/, (m) => akisAc(m[1])],
   [/^#\/video\/link$/, videoAc],
+  [/^#\/ai$/, aiSayfa],
   [/^#\/giris$/, giris],
   [/^#\/hesap$/, hesap],
 ];
@@ -290,6 +293,10 @@ function giris() {
 }
 
 // ——— HESAP (ayarlar) ———
+function aiSayfa() {
+  uyg.innerHTML = '<div class="dar ai-sayfa"></div>';
+  aiKur($('.ai-sayfa'), { listeKelimeleri });
+}
 async function hesap() {
   if (!BEN) return giris();
   const tema = temaOku();

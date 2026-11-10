@@ -8,6 +8,7 @@ import { yerelOku, yerelYaz } from './yerel.js';
 import { depodanOku, depoyaYaz } from './video-depo.js';
 import * as KS from './akis-kisisel.js';
 import { profilPlanla } from './profil-senkron.js';
+import { aiKur } from './ai.js';
 import { izleKaydet, izleGonder, KOD as KOD_SURUM } from './akis-izle.js';
 export const ilgiSorulduMu = KS.ilgiSorulduMu, ilgiSecenekleri = KS.ilgiSecenekleri, ilgiSor = KS.ilgiSor;
 
@@ -201,11 +202,13 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
           <button class="kv-dugme kv-kaydet" type="button" aria-label="Kaydet" aria-pressed="false"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4.5L5 21V4a1 1 0 0 1 1-1z"/></svg><span>Kaydet</span></button>
           <button class="kv-dugme kv-hiz" type="button" aria-label="Hız"><b>1x</b><span>Hız</span></button>
           ${true ? `<button class="kv-dugme kv-trans" type="button" aria-label="Konuşma metni"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M5 4h14v12H9l-4 4z"/></svg><span>Metin</span></button>` : ''}
+          <button class="kv-dugme kv-ai" type="button" aria-label="Yapay zekaya sor"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><span>AI</span></button>
           <button class="kv-dugme kv-paylas" type="button" aria-label="Paylaş"><svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 3v12M7 8l5-5 5 5M5 14v6h14v-6"/></svg><span>Paylaş</span></button>
           <button class="kv-dugme kv-ilgisiz" type="button" aria-label="İlgilenmiyorum"><svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg><span>İlgisiz</span></button>
         </div>
         <div class="kv-hizrozet" hidden>2x ▸▸</div>
         <div class="kv-transpanel" hidden></div>
+        <div class="kv-aipanel" hidden></div>
         ${v.hesap ? `<div class="kv-hesap"><a class="kh-ig" href="https://www.instagram.com/${e(v.hesap)}/" target="_blank" rel="noopener">@${e(v.hesap)} ↗</a><button class="kh-takip" type="button">${KS.hesapDurum(v.hesap) === 'takip' ? 'Takipte ✓' : 'Takip et'}</button><button class="kh-yok" type="button">İstemiyorum</button></div>` : ''}
         <div class="kv-ipucu" hidden></div>
         <div class="kv-altyazi"><p class="kv-satir" aria-live="off"></p><span class="kv-satir kv-olc" aria-hidden="true"></span></div>
@@ -358,6 +361,22 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
   let panelDevam = false;
   const transKapat = () => { const p = kart(aktif)?.querySelector('.kv-transpanel'); if (p) p.hidden = true; if (transDevam && !kullaniciDurdu) vid(aktif)?.play().catch(() => {}); transDevam = false; };
   let transDevam = false;
+  let aiDevam = false;
+  const aiKapat = (p = kart(aktif)?.querySelector('.kv-aipanel')) => { if (p) p.hidden = true; if (aiDevam && !kullaniciDurdu) vid(aktif)?.play().catch(() => {}); aiDevam = false; };
+  function aiAc(k, v) {   // videodan çıkmadan yapay zekaya sor: o anki altyazı cümlesi bağlam olarak gider; video panel açıkken durur
+    const p = k.querySelector('.kv-aipanel');
+    if (!p.hidden) return aiKapat(p);
+    transKapat(); sozlukKapat();
+    const el = vid(aktif); aiDevam = !!el && !el.paused; el?.pause();
+    p.hidden = false;
+    p.innerHTML = '<div class="ai-x" style="text-align:right;margin-bottom:4px"><button class="tp-kapat" type="button" aria-label="Kapat">×</button></div><div class="ai-yer" style="flex:1;min-height:0;display:flex"></div>';
+    p.querySelector('.tp-kapat').onclick = () => aiKapat(p);
+    aiKur(p.querySelector('.ai-yer'), { video: true, listeKelimeleri: KS.listeKelimeleri, baglam: async () => {
+      const d = await altyaziAl(v.id), t = el?.currentTime || 0, sat = d?.satirlar || [];
+      const su = sat.find((s) => t >= s.bas && t <= s.son) || [...sat].reverse().find((s) => s.bas <= t) || sat[0];
+      return { cumle: su ? su.k.map((x) => x[0]).join(' ') : '', video: v.baslik };
+    } });
+  }
   async function transAc(k, v) {   // konuşmanın tam metni: video DURMADAN akar, konuşulan kelime altyazıdaki gibi vurgulanır; kelimeye dokununca sözlük açılır
     const p = k.querySelector('.kv-transpanel');
     if (!p.hidden) return transKapat();
@@ -541,6 +560,8 @@ export function kendiAkis(kap, { dizin, ekle, girisli, girisGerekli, videolar: h
     if (kb) { kaydetDegistir(k.dataset.id, kb); return; }
     const i = [...liste.children].indexOf(k), el = vid(i), v = videolar[i];
     if (ev.target.closest('.kv-hiz')) { hiz = HIZLAR[(HIZLAR.indexOf(hiz) + 1) % HIZLAR.length]; try { localStorage.setItem('voca-hiz', String(hiz)); } catch { /* yok */ } hizYazi(); hizUygula(el); return; }
+    if (ev.target.closest('.kv-ai')) { aiAc(k, v); return; }
+    if (ev.target.closest('.kv-aipanel')) return;
     if (ev.target.closest('.kv-paylas')) { paylas(v); return; }
     if (ev.target.closest('.kv-ilgisiz')) { ilgisizYap(i, v); return; }
     if (ev.target.closest('.kh-ig')) return;
