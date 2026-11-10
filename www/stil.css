@@ -1219,3 +1219,15 @@ body[data-sayfa="video"] .alt-nav a.aktif::after { background: #fff; }
 .kv-aipanel[hidden] { display: none; }
 .kv-aipanel .ai-kap { flex: 1; min-height: 0; }
 .kv-aipanel .ai-k { background: #3a6df0; }
+
+/* ——— uygulama hissi (Kağan 10 Kasım: "tarayıcı gibi, kötü hissettiriyor") — yalnız uygulamada ——— */
+body.uygulama { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; overscroll-behavior: none; }
+body.uygulama :where(a, button, input, select, label, .kv-kart) { touch-action: manipulation; }
+body.uygulama :where(main, header, nav, h1, h2, h3, button, .kv-yan, .kv-hesap) { -webkit-user-select: none; user-select: none; }
+body.uygulama :where(.ai-m, .tp-metin, .sozcuk, input, textarea) { -webkit-user-select: text; user-select: text; }
+body.uygulama a { -webkit-user-drag: none; }
+body.uygulama .ai-m { transition: opacity .2s; }
+body.uygulama .ai-bekle { animation: ai-nefes 1.1s ease-in-out infinite; }
+@keyframes ai-nefes { 50% { opacity: .35; } }
+body.uygulama main { animation: sayfa-gir .18s ease-out; }
+@keyframes sayfa-gir { from { opacity: 0; transform: translateY(6px); } }
